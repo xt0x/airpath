@@ -680,8 +680,17 @@ export const apiContract = {
           budget: {
             type: "object",
             additionalProperties: false,
-            required: ["currency", "estimatedMonthToDateCost", "softStopThreshold", "stopped"],
+            required: [
+              "environment",
+              "month",
+              "currency",
+              "estimatedMonthToDateCost",
+              "softStopThreshold",
+              "stopped",
+            ],
             properties: {
+              environment: { type: "string", minLength: 1 },
+              month: { type: "string", pattern: "^\\d{4}-\\d{2}$" },
               currency: { type: "string", const: "USD" },
               estimatedMonthToDateCost: { type: "number", minimum: 0 },
               softStopThreshold: { type: "number", minimum: 0 },

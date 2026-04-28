@@ -21,7 +21,7 @@ func NewFixtureClient(data FixtureData) *FixtureClient {
 }
 
 func (c *FixtureClient) SearchFlights(_ context.Context, request SearchFlightsRequest) (SearchFlightsResponse, error) {
-	if err := requireOnePage(EndpointSearch, request.MaxPages); err != nil {
+	if _, err := normalizeMaxPages(EndpointSearch, request.MaxPages); err != nil {
 		return SearchFlightsResponse{}, err
 	}
 	response, ok := c.data.SearchResponses[request.Ident]
@@ -64,7 +64,7 @@ func (c *FixtureClient) GetFlightTrack(_ context.Context, request FlightTrackReq
 }
 
 func (c *FixtureClient) GetSchedules(_ context.Context, request SchedulesRequest) (SchedulesResponse, error) {
-	if err := requireOnePage(EndpointSchedule, request.MaxPages); err != nil {
+	if _, err := normalizeMaxPages(EndpointSchedule, request.MaxPages); err != nil {
 		return SchedulesResponse{}, err
 	}
 	key := ScheduleKey{StartDate: request.StartDate, EndDate: request.EndDate}
@@ -79,9 +79,12 @@ func (c *FixtureClient) GetAccountUsage(context.Context) (UsageResponse, error) 
 	return c.data.UsageResponse, nil
 }
 
-func requireOnePage(endpoint Endpoint, maxPages int) error {
-	if maxPages != 1 {
-		return maxPagesError(endpoint, maxPages)
+func normalizeMaxPages(endpoint Endpoint, maxPages int) (int, error) {
+	if maxPages == 0 {
+		return DefaultMaxPages, nil
 	}
-	return nil
+	if maxPages != DefaultMaxPages {
+		return 0, maxPagesError(endpoint, maxPages)
+	}
+	return maxPages, nil
 }

@@ -138,6 +138,8 @@ type FlightRefreshResponse struct {
 }
 
 type UsageBudgetStatus struct {
+	Environment              string  `json:"environment"`
+	Month                    string  `json:"month"`
 	Currency                 string  `json:"currency"`
 	EstimatedMonthToDateCost float64 `json:"estimatedMonthToDateCost"`
 	SoftStopThreshold        float64 `json:"softStopThreshold"`
@@ -181,6 +183,36 @@ type FlightRefreshInput struct {
 
 type UsageStatusInput struct {
 	CheckedAt string
+}
+
+const DefaultSoftStopThresholdUSD = 4.00
+
+type UsageBudgetScope struct {
+	Environment string
+	Month       string
+}
+
+func (s UsageBudgetScope) Key() string {
+	if s.Environment == "" || s.Month == "" {
+		return ""
+	}
+	return s.Environment + "#" + s.Month
+}
+
+func NormalizeUsageStatus(status UsageStatus) UsageStatus {
+	if status.Budget.Currency == "" {
+		status.Budget.Currency = "USD"
+	}
+	if status.Budget.SoftStopThreshold == 0 {
+		status.Budget.SoftStopThreshold = DefaultSoftStopThresholdUSD
+	}
+	if status.Budget.EstimatedMonthToDateCost >= status.Budget.SoftStopThreshold {
+		status.Budget.Stopped = true
+	}
+	if status.Budget.Stopped {
+		status.FetchingEnabled = false
+	}
+	return status
 }
 
 type ApiErrorCode string

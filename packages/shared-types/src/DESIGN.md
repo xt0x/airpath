@@ -62,4 +62,6 @@ The package exports an OpenAPI 3.1 MVP contract for the backend HTTP API. The co
 
 Every success response carries `CacheMetadata` so callers can distinguish fresh cache, stale cache, cache misses, derived data, local accounting, and FlightAware-backed data. Typed error responses cover budget stop, rate limiting, stale-cache misses, upstream failures, and explicit FlightAware fetch disablement.
 
+Usage status includes the monthly budget scope (`environment` and `month`) so the API contract matches the backend DynamoDB usage budget state.
+
 `FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
