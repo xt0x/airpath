@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ts:
+    uses: ./.github/workflows/ci-ts.yml
+
+  go:
+    uses: ./.github/workflows/ci-go.yml
+
+  terraform:
+    uses: ./.github/workflows/ci-terraform.yml
+
+  workflows:
+    uses: ./.github/workflows/ci-workflows.yml
