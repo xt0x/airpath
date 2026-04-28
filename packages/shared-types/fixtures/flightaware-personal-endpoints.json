@@ -1,0 +1,71 @@
+{
+  "source": {
+    "fixtureName": "flightaware-personal-endpoint-table",
+    "verificationDate": "2026-04-29",
+    "captureStatus": "official-pricing-and-support-docs-summary",
+    "note": "Personal free-allowance MVP endpoint table. Confirm current official FlightAware pricing, endpoint availability, rate limits, and license terms before enabling real calls."
+  },
+  "guardrails": {
+    "defaultMaxPages": 1,
+    "realCallTests": "opt-in",
+    "browserAccess": "forbidden",
+    "backendAccess": "required",
+    "softStopThresholdUsd": 4.0
+  },
+  "endpoints": [
+    {
+      "endpoint": "GET /flights/{ident}",
+      "fixtureName": "flight-ident-search-response",
+      "mvpUse": "ident search and flight summary seed",
+      "personalFreeAllowanceUse": "allowed-with-budget-guard",
+      "defaultMaxPages": 1,
+      "cachePolicy": "cache normalized search results before requerying"
+    },
+    {
+      "endpoint": "GET /flights/{id}/position",
+      "fixtureName": "current-position-response-cases",
+      "mvpUse": "current position for actively viewed flights",
+      "personalFreeAllowanceUse": "allowed-with-budget-guard",
+      "defaultMaxPages": 1,
+      "cachePolicy": "only poll while a flight detail or map view is active"
+    },
+    {
+      "endpoint": "GET /flights/{id}/route",
+      "fixtureName": "flight-route-response-cases",
+      "mvpUse": "planned route display",
+      "personalFreeAllowanceUse": "allowed-with-budget-guard",
+      "defaultMaxPages": 1,
+      "cachePolicy": "fetch once per selected flight unless stale or manually refreshed"
+    },
+    {
+      "endpoint": "GET /flights/{id}/track",
+      "fixtureName": "flight-track-response-cases",
+      "mvpUse": "actual track display and final track fetch",
+      "personalFreeAllowanceUse": "allowed-with-budget-guard",
+      "defaultMaxPages": 1,
+      "cachePolicy": "avoid high-frequency use; reserve for initial display, correction, and final fetch"
+    },
+    {
+      "endpoint": "GET /schedules/{date_start}/{date_end}",
+      "fixtureName": "future-schedule-without-fa-flight-id",
+      "mvpUse": "future scheduled flights with provisional IDs",
+      "personalFreeAllowanceUse": "allowed-with-budget-guard",
+      "defaultMaxPages": 1,
+      "cachePolicy": "use only for bounded future schedule verification"
+    },
+    {
+      "endpoint": "GET /account/usage",
+      "fixtureName": "account-usage-response",
+      "mvpUse": "usage reconciliation for budget guard",
+      "personalFreeAllowanceUse": "free-usage-check",
+      "defaultMaxPages": 1,
+      "cachePolicy": "periodic reconciliation; local accounting remains authoritative between updates"
+    }
+  ],
+  "excludedEndpointFamilies": [
+    "FlightAware Alerts",
+    "Historical Flight Data",
+    "Foresight",
+    "Aireon"
+  ]
+}
