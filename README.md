@@ -21,6 +21,7 @@ pnpm install
 make lint
 make test
 make build
+make lambda-artifacts
 make terraform-check
 make terraform-validate
 make ci
@@ -82,3 +83,28 @@ Terraform must store only secret references, such as Secrets Manager ARNs or par
 Application logs, CI logs, Terraform logs, and error responses must redact sensitive request data. Do not log `Authorization`, `Cookie`, API key headers, JWTs, WebSocket tokens, FlightAware credentials, Mapbox secret tokens, or raw request bodies that may contain those values.
 
 Local `.env` files, Terraform variable files, private keys, certificates, state files, and plan files are ignored by Git. Commit only `.env.example` files with non-secret defaults and placeholder names.
+
+## Personal Demo Environment
+
+The `dev` deployment is a personal, non-commercial, low-frequency demo environment. It is intended for cache-first development and limited verification, not commercial tracking or high-volume polling.
+
+Build deployable Go Lambda artifacts before applying the dev Terraform root:
+
+```sh
+make lambda-artifacts
+cd infra/terraform/envs/dev
+terraform init
+terraform apply
+```
+
+Real FlightAware calls are disabled by default. A dev deployment must set both `FLIGHTAWARE_FETCH_ENABLED=true` and `FLIGHTAWARE_REAL_CALLS_ENABLED=true` before any real FlightAware call is allowed. The Terraform variable `allow_real_flightaware_calls` sets both flags for a limited opt-in deployment and defaults to `false`.
+
+F17 acceptance should cover fixture tests, local integration tests, and limited real-call smoke tests:
+
+```sh
+pnpm test
+cd services && env -u GOROOT go test ./...
+cd services && AIRPATH_FLIGHTAWARE_REAL_TESTS=true FLIGHTAWARE_API_KEY="$FLIGHTAWARE_API_KEY" FLIGHTAWARE_TEST_IDENT=ANA110 env -u GOROOT go test ./internal/awsintegration -run OptIn
+```
+
+Run the limited real-call smoke tests only from a personal account, with a backend-only `FLIGHTAWARE_API_KEY` environment variable, and stop after the smoke run completes.

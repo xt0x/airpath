@@ -106,4 +106,27 @@ describe("flight dashboard UI", () => {
     expect(dashboard).toContain("ANA110");
     expect(dashboard).toContain("3.00 USD remaining");
   });
+
+  it("renders the personal non-commercial low-frequency demo notice", () => {
+    const dashboard = renderToStaticMarkup(
+      <FlightDashboardView
+        detail={sampleDetail}
+        error={null}
+        isRefreshing={false}
+        isSearching={false}
+        mapData={sampleMapData}
+        query="ANA110"
+        searchResults={sampleSearch.items}
+        selectedFlightId="iflg_1"
+        usage={sampleUsage}
+        onQueryChange={() => undefined}
+        onRefresh={() => undefined}
+        onSearch={() => undefined}
+        onSelectFlight={() => undefined}
+      />,
+    );
+
+    expect(dashboard).toContain("Personal non-commercial demo");
+    expect(dashboard).toContain("low-frequency");
+  });
 });

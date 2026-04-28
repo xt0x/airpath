@@ -3,7 +3,7 @@ SHELL := /bin/bash
 GO_ENV := env -u GOROOT
 TFLINT ?= tflint
 
-.PHONY: help lint test build format terraform-fmt terraform-lint terraform-validate terraform-check workflow-lint ci
+.PHONY: help lint test build format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-check workflow-lint ci
 .PHONY: pnpm-install pnpm-lint pnpm-test pnpm-build go-fmt go-vet go-test go-lint
 .PHONY: pnpm-typecheck frontend-build ci-ts ci-go ci-terraform
 
@@ -13,6 +13,7 @@ help:
 		'  make lint               Run formatting checks and language linters' \
 		'  make test               Run unit tests' \
 		'  make build              Run build checks' \
+		'  make lambda-artifacts   Build dev Lambda zip artifacts' \
 		'  make format             Format supported files' \
 		'  make pnpm-install       Install pnpm dependencies with the lockfile' \
 		'  make terraform-fmt      Check Terraform formatting' \
@@ -56,6 +57,15 @@ lint: pnpm-lint go-lint terraform-check
 test: pnpm-test go-test
 
 build: pnpm-build go-test
+
+lambda-artifacts:
+	mkdir -p artifacts/dev
+	cd services && $(GO_ENV) GOOS=linux GOARCH=amd64 go build -o ../artifacts/dev/bootstrap ./cmd/api
+	cd artifacts/dev && zip -q -j api-lambda.zip bootstrap && rm bootstrap
+	cd services && $(GO_ENV) GOOS=linux GOARCH=amd64 go build -o ../artifacts/dev/bootstrap ./cmd/fetcher
+	cd artifacts/dev && zip -q -j fetcher-lambda.zip bootstrap && rm bootstrap
+	cd services && $(GO_ENV) GOOS=linux GOARCH=amd64 go build -o ../artifacts/dev/bootstrap ./cmd/dispatcher
+	cd artifacts/dev && zip -q -j dispatcher-lambda.zip bootstrap && rm bootstrap
 
 ci-ts:
 	pnpm run lint

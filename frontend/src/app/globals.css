@@ -79,6 +79,13 @@ h2 {
   line-height: 1.25;
 }
 
+.demo-notice {
+  color: #596673;
+  font-size: 13px;
+  font-weight: 650;
+  margin: 6px 0 0;
+}
+
 .workspace {
   display: grid;
   gap: 18px;

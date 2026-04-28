@@ -9,3 +9,8 @@ dispatcher_schedule_expression = "rate(15 minutes)"
 geojson_artifact_retention_days = 30
 fetch_task_max_receive_count    = 3
 flightaware_api_key_secret_name = "airpath/dev/flightaware-api-key"
+
+# Personal demo safety: keep real FlightAware calls disabled unless running a limited opt-in smoke test.
+allow_real_flightaware_calls     = false
+flightaware_fetch_disabled_reason = "personal_demo_real_calls_disabled"
+personal_demo_notice             = "personal non-commercial low-frequency demo; real FlightAware calls are disabled unless explicitly opted in."

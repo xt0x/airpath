@@ -132,6 +132,7 @@ export function FlightDashboardView(props: FlightDashboardViewProps) {
         <div>
           <p className="eyebrow">Airpath</p>
           <h1>Flight route workspace</h1>
+          <p className="demo-notice">Personal non-commercial demo - low-frequency use</p>
         </div>
         <UsageStatusBanner usage={props.usage} />
       </header>
