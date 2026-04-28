@@ -325,6 +325,180 @@ func TestTimeNormalizationRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestNormalizeAltitudeFeet(t *testing.T) {
+	if got := NormalizeAltitudeFeet(ptr(370)); got == nil || *got != 37000 {
+		t.Fatalf("NormalizeAltitudeFeet(370) = %v, want 37000", got)
+	}
+	if got := NormalizeAltitudeFeet(ptr(0)); got == nil || *got != 0 {
+		t.Fatalf("NormalizeAltitudeFeet(0) = %v, want 0", got)
+	}
+	if got := NormalizeAltitudeFeet(nil); got != nil {
+		t.Fatalf("NormalizeAltitudeFeet(nil) = %v, want nil", got)
+	}
+}
+
+func TestNormalizeSpeedAndHeadingKeepMissingValues(t *testing.T) {
+	if got := NormalizeGroundspeedKnots(ptr(488)); got == nil || *got != 488 {
+		t.Fatalf("NormalizeGroundspeedKnots(488) = %v, want 488", got)
+	}
+	if got := NormalizeGroundspeedKnots(nil); got != nil {
+		t.Fatalf("NormalizeGroundspeedKnots(nil) = %v, want nil", got)
+	}
+	if got := NormalizeHeadingDegrees(ptr(275)); got == nil || *got != 275 {
+		t.Fatalf("NormalizeHeadingDegrees(275) = %v, want 275", got)
+	}
+	if got := NormalizeHeadingDegrees(nil); got != nil {
+		t.Fatalf("NormalizeHeadingDegrees(nil) = %v, want nil", got)
+	}
+}
+
+func TestNormalizeHeadingDegreesTreats360AsZero(t *testing.T) {
+	if got := NormalizeHeadingDegrees(ptr(0)); got == nil || *got != 0 {
+		t.Fatalf("NormalizeHeadingDegrees(0) = %v, want 0", got)
+	}
+	if got := NormalizeHeadingDegrees(ptr(360)); got == nil || *got != 0 {
+		t.Fatalf("NormalizeHeadingDegrees(360) = %v, want 0", got)
+	}
+}
+
+func TestNormalizeFlightPositionMetrics(t *testing.T) {
+	converted := NormalizeFlightPositionMetrics(FlightPositionMetricsInput{
+		AltitudeHundredsFeet: ptr(370),
+		GroundspeedKnots:     ptr(488),
+		HeadingDegrees:       ptr(360),
+	})
+	if converted.AltitudeHundredsFeet == nil || *converted.AltitudeHundredsFeet != 370 {
+		t.Fatalf("AltitudeHundredsFeet = %v, want 370", converted.AltitudeHundredsFeet)
+	}
+	if converted.AltitudeFeet == nil || *converted.AltitudeFeet != 37000 {
+		t.Fatalf("AltitudeFeet = %v, want 37000", converted.AltitudeFeet)
+	}
+	if converted.GroundspeedKnots == nil || *converted.GroundspeedKnots != 488 {
+		t.Fatalf("GroundspeedKnots = %v, want 488", converted.GroundspeedKnots)
+	}
+	if converted.HeadingDegrees == nil || *converted.HeadingDegrees != 0 {
+		t.Fatalf("HeadingDegrees = %v, want 0", converted.HeadingDegrees)
+	}
+
+	missing := NormalizeFlightPositionMetrics(FlightPositionMetricsInput{})
+	if missing.AltitudeHundredsFeet != nil {
+		t.Fatalf("missing AltitudeHundredsFeet = %v, want nil", missing.AltitudeHundredsFeet)
+	}
+	if missing.AltitudeFeet != nil {
+		t.Fatalf("missing AltitudeFeet = %v, want nil", missing.AltitudeFeet)
+	}
+	if missing.GroundspeedKnots != nil {
+		t.Fatalf("missing GroundspeedKnots = %v, want nil", missing.GroundspeedKnots)
+	}
+	if missing.HeadingDegrees != nil {
+		t.Fatalf("missing HeadingDegrees = %v, want nil", missing.HeadingDegrees)
+	}
+}
+
+func TestCalculateFlightDurationUsesActualRunwayTimesFirst(t *testing.T) {
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           baseFlightDurationTimes(),
+		FiledEteSeconds: ptr(42000),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want actual duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindActual, 40920, ptr(ISODateTimeString("2026-04-25T10:08:00Z")), ptr(ISODateTimeString("2026-04-25T21:30:00Z")))
+}
+
+func TestCalculateFlightDurationFallsBackByPriority(t *testing.T) {
+	times := baseFlightDurationTimes()
+	times.ActualOff = nil
+	times.ActualOn = nil
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(42000),
+	})
+	if got == nil {
+		t.Fatal("estimated duration = nil")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindEstimated, 41400, ptr(ISODateTimeString("2026-04-25T10:05:00Z")), ptr(ISODateTimeString("2026-04-25T21:35:00Z")))
+
+	times.EstimatedOff = nil
+	times.EstimatedOn = nil
+	got = CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(42000),
+	})
+	if got == nil {
+		t.Fatal("scheduled duration = nil")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindScheduled, 42000, ptr(ISODateTimeString("2026-04-25T10:00:00Z")), ptr(ISODateTimeString("2026-04-25T21:40:00Z")))
+
+	times.ScheduledOff = nil
+	times.ScheduledOn = nil
+	got = CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(42000),
+	})
+	if got == nil {
+		t.Fatal("filed duration = nil")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindFiled, 42000, nil, nil)
+
+	got = CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: nil,
+	})
+	if got == nil {
+		t.Fatal("gate duration = nil")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindGateActual, 42480, ptr(ISODateTimeString("2026-04-25T10:02:00Z")), ptr(ISODateTimeString("2026-04-25T21:50:00Z")))
+}
+
+func TestCalculateFlightDurationReturnsNilWithoutCompleteSource(t *testing.T) {
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           FlightTimes{},
+		FiledEteSeconds: nil,
+	})
+	if got != nil {
+		t.Fatalf("CalculateFlightDuration() = %+v, want nil", got)
+	}
+}
+
+func baseFlightDurationTimes() FlightTimes {
+	return FlightTimes{
+		ScheduledOut: ptr(ISODateTimeString("2026-04-25T09:30:00Z")),
+		ActualOut:    ptr(ISODateTimeString("2026-04-25T10:02:00Z")),
+		ScheduledOff: ptr(ISODateTimeString("2026-04-25T10:00:00Z")),
+		EstimatedOff: ptr(ISODateTimeString("2026-04-25T10:05:00Z")),
+		ActualOff:    ptr(ISODateTimeString("2026-04-25T10:08:00Z")),
+		ScheduledOn:  ptr(ISODateTimeString("2026-04-25T21:40:00Z")),
+		EstimatedOn:  ptr(ISODateTimeString("2026-04-25T21:35:00Z")),
+		ActualOn:     ptr(ISODateTimeString("2026-04-25T21:30:00Z")),
+		ActualIn:     ptr(ISODateTimeString("2026-04-25T21:50:00Z")),
+	}
+}
+
+func assertFlightDuration(t *testing.T, got FlightDuration, kind FlightDurationKind, seconds int, startAt *ISODateTimeString, endAt *ISODateTimeString) {
+	t.Helper()
+	if got.Kind != kind {
+		t.Fatalf("Kind = %q, want %q", got.Kind, kind)
+	}
+	if got.Seconds != seconds {
+		t.Fatalf("Seconds = %d, want %d", got.Seconds, seconds)
+	}
+	if !equalISODateTimePointers(got.StartAt, startAt) {
+		t.Fatalf("StartAt = %v, want %v", got.StartAt, startAt)
+	}
+	if !equalISODateTimePointers(got.EndAt, endAt) {
+		t.Fatalf("EndAt = %v, want %v", got.EndAt, endAt)
+	}
+}
+
+func equalISODateTimePointers(left *ISODateTimeString, right *ISODateTimeString) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+
+	return *left == *right
+}
+
 func ptr[T any](value T) *T {
 	return &value
 }

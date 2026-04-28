@@ -6,7 +6,7 @@ This source directory owns TypeScript domain contracts that are shared by the we
 
 The initial domain model exports basic, dependency-free TypeScript types for flights, airports, positions, events, persistent user watches, and WebSocket session subscriptions. These types intentionally keep nullable FlightAware-derived fields as `null` instead of defaulting to empty strings or zero values.
 
-Unit conversion, duration calculation, and event dedupe key generation are left to later L2 work items.
+Event dedupe key generation is left to a later L2 work item.
 
 ## L2-02 Flight Leg ID Generation
 
@@ -37,3 +37,15 @@ The helpers never coerce nullish values to `0` or an empty string. Go mirrors th
 Time normalization helpers convert FlightAware timestamps and UI local date-time input into UTC ISO 8601 strings without milliseconds. FlightAware values must include `Z` or a numeric offset, and UI input must provide both a local ISO date-time string and an IANA timezone.
 
 The helpers reject invalid timestamps and invalid timezone names instead of guessing. Go mirrors the TypeScript behavior in `services/internal/domain`.
+
+## L2-05 Position Metric Conversion
+
+Position metric helpers normalize FlightAware-derived altitude, speed, and heading fields without inventing values when the source is missing. `altitudeFeet` is calculated only when `altitudeHundredsFeet` is present, using `altitudeHundredsFeet * 100`.
+
+Groundspeed remains in knots. Heading remains in degrees, with `360` normalized to `0` for display rotation because the specification treats those values as equivalent. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
+
+## L2-06 Flight Duration Calculation
+
+Flight duration helpers calculate the best available duration using the specification priority order: actual runway time, estimated runway time, scheduled runway time, filed ETE, then actual gate-to-gate time.
+
+The result keeps the duration kind and, when the duration came from timestamps, the normalized UTC start and end timestamps. Incomplete timestamp pairs are skipped rather than partially calculated. Go mirrors the TypeScript helper behavior in `services/internal/domain`.

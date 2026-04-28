@@ -174,3 +174,12 @@ export type {
 } from "./nullable-display.js";
 export { normalizeLocalDateTimeToUtcIso, normalizeUtcIsoDateTime } from "./time-normalization.js";
 export type { NormalizeLocalDateTimeInput } from "./time-normalization.js";
+export {
+  normalizeAltitudeFeet,
+  normalizeFlightPositionMetrics,
+  normalizeGroundspeedKnots,
+  normalizeHeadingDegrees,
+} from "./position-metrics.js";
+export type { FlightPositionMetrics, FlightPositionMetricsInput } from "./position-metrics.js";
+export { calculateFlightDuration } from "./flight-duration.js";
+export type { FlightDuration, FlightDurationInput, FlightDurationKind } from "./flight-duration.js";
