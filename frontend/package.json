@@ -12,6 +12,10 @@
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@airpath/shared-types": "workspace:*",
+    "@deck.gl/layers": "^9.3.1",
+    "@deck.gl/react": "^9.3.1",
+    "mapbox-gl": "^3.22.0",
     "next": "^16.0.10",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"

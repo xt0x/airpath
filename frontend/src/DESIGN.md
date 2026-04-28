@@ -8,3 +8,9 @@ The frontend uses the Next.js `src/` directory convention for application route 
 - Cross-cutting browser utilities should be introduced under `src/lib` only when they are independent of a single route or feature.
 
 Keep Next.js configuration, package metadata, and environment examples at the `frontend/` root. Keep application route implementation inside `frontend/src/app`.
+
+## F14 Flight MVP UI
+
+`src/features/flights` owns the FlightAware free-allowance MVP browser workflow. It contains a typed API client for the HTTP contract, server-renderable component tests for search/results, summary, map layers, refresh guard state, stale cache notices, and usage budget display, plus the client dashboard state container used by the app route.
+
+The map surface consumes normalized route, track, and current-position layers from the API. The map adapter builds deck.gl `GeoJsonLayer` and `ScatterplotLayer` instances for the Mapbox light style, while the component also renders a lightweight SVG fallback so server-rendered and tokenless local views remain inspectable.
