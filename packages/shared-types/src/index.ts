@@ -155,3 +155,6 @@ export interface FlightSubscription {
   lastSeenAt: ISODateTimeString;
   ttl: EpochSeconds | null;
 }
+
+export { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./id-generation.js";
+export type { InternalFlightLegIDInput, ProvisionalFlightLegIDInput } from "./id-generation.js";

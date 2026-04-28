@@ -147,6 +147,51 @@ func TestWatchAndSubscriptionModelsStaySeparate(t *testing.T) {
 	}
 }
 
+func TestGenerateProvisionalFlightLegID(t *testing.T) {
+	input := ProvisionalFlightLegIDInput{
+		Ident:           "ANA110",
+		OriginCode:      "RJTT",
+		DestinationCode: "KJFK",
+		ScheduledOut:    "2026-08-01T01:00:00Z",
+	}
+
+	got := GenerateProvisionalFlightLegID(input)
+	if got != "sched_c9df8a3ee088" {
+		t.Fatalf("GenerateProvisionalFlightLegID() = %q, want %q", got, "sched_c9df8a3ee088")
+	}
+	if got != GenerateProvisionalFlightLegID(input) {
+		t.Fatal("GenerateProvisionalFlightLegID() is not stable for identical input")
+	}
+
+	input.DestinationCode = "KLAX"
+	if got := GenerateProvisionalFlightLegID(input); got != "sched_b76cfb4f33db" {
+		t.Fatalf("GenerateProvisionalFlightLegID() with changed destination = %q, want %q", got, "sched_b76cfb4f33db")
+	}
+}
+
+func TestGenerateInternalFlightLegID(t *testing.T) {
+	input := InternalFlightLegIDInput{
+		FAFlightID:      "UAL1234-1234567890-airline-0123",
+		OriginCode:      "KSFO",
+		DestinationCode: "RJTT",
+		ScheduledOut:    "2026-04-25T10:00:00Z",
+		LegIndex:        0,
+	}
+
+	got := GenerateInternalFlightLegID(input)
+	if got != "iflg_de338117b7ac" {
+		t.Fatalf("GenerateInternalFlightLegID() = %q, want %q", got, "iflg_de338117b7ac")
+	}
+	if got != GenerateInternalFlightLegID(input) {
+		t.Fatal("GenerateInternalFlightLegID() is not stable for identical input")
+	}
+
+	input.LegIndex = 1
+	if got := GenerateInternalFlightLegID(input); got != "iflg_de338217b7ac" {
+		t.Fatalf("GenerateInternalFlightLegID() with changed legIndex = %q, want %q", got, "iflg_de338217b7ac")
+	}
+}
+
 func ptr[T any](value T) *T {
 	return &value
 }

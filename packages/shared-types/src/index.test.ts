@@ -8,6 +8,7 @@ import type {
   FlightSubscription,
   UserWatch,
 } from "./index.js";
+import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./index.js";
 
 describe("shared domain models", () => {
   it("represents a flight with nullable FlightAware fields", () => {
@@ -139,5 +140,44 @@ describe("shared domain models", () => {
 
     expect(watch.watchState).toBe("active");
     expect(subscription.subscriptionType).toBe("session");
+  });
+});
+
+describe("flight leg ID generation", () => {
+  it("generates a stable provisionalFlightLegId from schedule fields", () => {
+    const input = {
+      ident: "ANA110",
+      originCode: "RJTT",
+      destinationCode: "KJFK",
+      scheduledOut: "2026-08-01T01:00:00Z",
+    };
+
+    expect(generateProvisionalFlightLegId(input)).toBe("sched_c9df8a3ee088");
+    expect(generateProvisionalFlightLegId(input)).toBe(generateProvisionalFlightLegId(input));
+    expect(
+      generateProvisionalFlightLegId({
+        ...input,
+        destinationCode: "KLAX",
+      }),
+    ).toBe("sched_b76cfb4f33db");
+  });
+
+  it("generates a stable internalFlightLegId from FlightAware and leg fields", () => {
+    const input = {
+      faFlightId: "UAL1234-1234567890-airline-0123",
+      originCode: "KSFO",
+      destinationCode: "RJTT",
+      scheduledOut: "2026-04-25T10:00:00Z",
+      legIndex: 0,
+    };
+
+    expect(generateInternalFlightLegId(input)).toBe("iflg_de338117b7ac");
+    expect(generateInternalFlightLegId(input)).toBe(generateInternalFlightLegId(input));
+    expect(
+      generateInternalFlightLegId({
+        ...input,
+        legIndex: 1,
+      }),
+    ).toBe("iflg_de338217b7ac");
   });
 });
