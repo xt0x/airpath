@@ -1,8 +1,6 @@
 package domain
 
 type FlightEventDedupeKeyInput struct {
-	Source                 FlightEventSource
-	AlertID                *string
 	EventType              FlightEventType
 	FAFlightID             *FAFlightID
 	ProvisionalFlightLegID *ProvisionalFlightLegID
@@ -11,24 +9,11 @@ type FlightEventDedupeKeyInput struct {
 
 func GenerateFlightEventDedupeKey(input FlightEventDedupeKeyInput) string {
 	return hashFlightIDParts(
-		string(input.Source),
-		eventDedupeSourceID(input),
+		string(FlightEventSourcePolling),
 		string(input.EventType),
 		eventDedupeFlightKey(input),
 		string(input.EventTimestamp),
 	)
-}
-
-func eventDedupeSourceID(input FlightEventDedupeKeyInput) string {
-	if input.Source == FlightEventSourceAlert {
-		if input.AlertID == nil {
-			return ""
-		}
-
-		return *input.AlertID
-	}
-
-	return "polling"
 }
 
 func eventDedupeFlightKey(input FlightEventDedupeKeyInput) string {
@@ -39,5 +24,5 @@ func eventDedupeFlightKey(input FlightEventDedupeKeyInput) string {
 		return string(*input.ProvisionalFlightLegID)
 	}
 
-	return ""
+	panic("faFlightId or provisionalFlightLegId is required for event dedupe keys")
 }

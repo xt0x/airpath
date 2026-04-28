@@ -6,8 +6,6 @@ type FlightID = string
 type InternalFlightLegID = string
 type ProvisionalFlightLegID = string
 type FAFlightID = string
-type UserID = string
-type ConnectionID = string
 type AirportCode = string
 
 type FlightIDType string
@@ -35,7 +33,6 @@ type PositionSource string
 const (
 	PositionSourceFlightAwarePosition PositionSource = "flightaware_position"
 	PositionSourceFlightAwareTrack    PositionSource = "flightaware_track"
-	PositionSourceAlert               PositionSource = "alert"
 	PositionSourceManual              PositionSource = "manual"
 )
 
@@ -74,21 +71,6 @@ type FlightEventSource string
 
 const (
 	FlightEventSourcePolling FlightEventSource = "polling"
-	FlightEventSourceAlert   FlightEventSource = "alert"
-)
-
-type WatchState string
-
-const (
-	WatchStateActive  WatchState = "active"
-	WatchStatePaused  WatchState = "paused"
-	WatchStateRemoved WatchState = "removed"
-)
-
-type SubscriptionType string
-
-const (
-	SubscriptionTypeSession SubscriptionType = "session"
 )
 
 type Airport struct {
@@ -137,9 +119,6 @@ type Flight struct {
 	LatestPositionTimestamp *ISODateTimeString      `json:"latestPositionTimestamp"`
 	LatestPositionSource    *PositionSource         `json:"latestPositionSource"`
 	PollState               *FlightPollState        `json:"pollState"`
-	WatcherCount            int                     `json:"watcherCount"`
-	SessionSubscriberCount  int                     `json:"sessionSubscriberCount"`
-	PersistentWatcherCount  int                     `json:"persistentWatcherCount"`
 	FetchLeaseUntil         *ISODateTimeString      `json:"fetchLeaseUntil"`
 	FetchOwner              *string                 `json:"fetchOwner"`
 	NextSummaryPollAt       *ISODateTimeString      `json:"nextSummaryPollAt"`
@@ -181,25 +160,4 @@ type FlightEvent struct {
 	Source                 FlightEventSource       `json:"source"`
 	AppliedToFlightState   bool                    `json:"appliedToFlightState"`
 	CreatedAt              ISODateTimeString       `json:"createdAt"`
-}
-
-type UserWatch struct {
-	UserID       UserID            `json:"userId"`
-	FlightID     FlightID          `json:"flightId"`
-	FAFlightID   *FAFlightID       `json:"faFlightId"`
-	FlightIDType FlightIDType      `json:"flightIdType"`
-	WatchState   WatchState        `json:"watchState"`
-	CreatedAt    ISODateTimeString `json:"createdAt"`
-	UpdatedAt    ISODateTimeString `json:"updatedAt"`
-	TTL          *EpochSeconds     `json:"ttl"`
-}
-
-type FlightSubscription struct {
-	FlightID         FlightID          `json:"flightId"`
-	ConnectionID     ConnectionID      `json:"connectionId"`
-	UserID           UserID            `json:"userId"`
-	SubscriptionType SubscriptionType  `json:"subscriptionType"`
-	CreatedAt        ISODateTimeString `json:"createdAt"`
-	LastSeenAt       ISODateTimeString `json:"lastSeenAt"`
-	TTL              *EpochSeconds     `json:"ttl"`
 }

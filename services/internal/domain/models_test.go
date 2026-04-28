@@ -41,9 +41,6 @@ func TestFlightModelKeepsNullableFlightAwareFields(t *testing.T) {
 		LatestPositionTimestamp: nil,
 		LatestPositionSource:    nil,
 		PollState:               ptr(FlightPollStateScheduled),
-		WatcherCount:            0,
-		SessionSubscriberCount:  0,
-		PersistentWatcherCount:  0,
 		FetchLeaseUntil:         nil,
 		FetchOwner:              nil,
 		NextSummaryPollAt:       nil,
@@ -115,35 +112,6 @@ func TestPositionAndEventModels(t *testing.T) {
 	}
 	if event.Payload["sourceStatus"] != "En Route" {
 		t.Fatalf("payload sourceStatus = %v", event.Payload["sourceStatus"])
-	}
-}
-
-func TestWatchAndSubscriptionModelsStaySeparate(t *testing.T) {
-	watch := UserWatch{
-		UserID:       "user_123",
-		FlightID:     "iflg_8d2a2a3a6c4f",
-		FAFlightID:   ptr("UAL1234-1234567890-airline-0123"),
-		FlightIDType: FlightIDTypeInternal,
-		WatchState:   WatchStateActive,
-		CreatedAt:    "2026-04-25T15:00:00Z",
-		UpdatedAt:    "2026-04-25T15:00:00Z",
-		TTL:          nil,
-	}
-	subscription := FlightSubscription{
-		FlightID:         "iflg_8d2a2a3a6c4f",
-		ConnectionID:     "abc123",
-		UserID:           "user_123",
-		SubscriptionType: SubscriptionTypeSession,
-		CreatedAt:        "2026-04-25T15:01:00Z",
-		LastSeenAt:       "2026-04-25T15:02:00Z",
-		TTL:              ptr(int64(1770000000)),
-	}
-
-	if watch.WatchState != WatchStateActive {
-		t.Fatalf("WatchState = %q", watch.WatchState)
-	}
-	if subscription.SubscriptionType != SubscriptionTypeSession {
-		t.Fatalf("SubscriptionType = %q", subscription.SubscriptionType)
 	}
 }
 
@@ -461,50 +429,43 @@ func TestCalculateFlightDurationReturnsNilWithoutCompleteSource(t *testing.T) {
 	}
 }
 
-func TestGenerateFlightEventDedupeKeyForAlert(t *testing.T) {
-	input := FlightEventDedupeKeyInput{
-		Source:                 FlightEventSourceAlert,
-		AlertID:                ptr("alert-123"),
-		EventType:              FlightEventTypeDeparture,
-		FAFlightID:             ptr(FAFlightID("UAL1234-1234567890-airline-0123")),
-		ProvisionalFlightLegID: nil,
-		EventTimestamp:         "2026-04-25T10:08:00Z",
-	}
-
-	got := GenerateFlightEventDedupeKey(input)
-	if got != "79c851e2d0d0" {
-		t.Fatalf("GenerateFlightEventDedupeKey(alert) = %q, want %q", got, "79c851e2d0d0")
-	}
-	if got != GenerateFlightEventDedupeKey(input) {
-		t.Fatal("GenerateFlightEventDedupeKey(alert) is not stable")
-	}
-}
-
 func TestGenerateFlightEventDedupeKeyUsesProvisionalFlightLegID(t *testing.T) {
 	got := GenerateFlightEventDedupeKey(FlightEventDedupeKeyInput{
-		Source:                 FlightEventSourceAlert,
-		AlertID:                ptr("alert-999"),
 		EventType:              FlightEventTypeDeparture,
 		FAFlightID:             nil,
 		ProvisionalFlightLegID: ptr(ProvisionalFlightLegID("sched_3f5a7c8d91ab")),
 		EventTimestamp:         "2026-04-25T10:08:00Z",
 	})
-	if got != "cf3f553a88e8" {
-		t.Fatalf("GenerateFlightEventDedupeKey(provisional) = %q, want %q", got, "cf3f553a88e8")
+	if got != "13b84e62b4d0" {
+		t.Fatalf("GenerateFlightEventDedupeKey(provisional) = %q, want %q", got, "13b84e62b4d0")
 	}
 }
 
 func TestGenerateFlightEventDedupeKeyForPolling(t *testing.T) {
 	got := GenerateFlightEventDedupeKey(FlightEventDedupeKeyInput{
-		Source:                 FlightEventSourcePolling,
 		EventType:              FlightEventTypeArrival,
 		FAFlightID:             ptr(FAFlightID("iflg_8d2a2a3a6c4f")),
 		ProvisionalFlightLegID: nil,
 		EventTimestamp:         "2026-04-25T21:50:00Z",
 	})
-	if got != "71a8a0fd8100" {
-		t.Fatalf("GenerateFlightEventDedupeKey(polling) = %q, want %q", got, "71a8a0fd8100")
+	if got != "b22238bbb5ee" {
+		t.Fatalf("GenerateFlightEventDedupeKey(polling) = %q, want %q", got, "b22238bbb5ee")
 	}
+}
+
+func TestGenerateFlightEventDedupeKeyRequiresFlightKey(t *testing.T) {
+	defer func() {
+		if recovered := recover(); recovered == nil {
+			t.Fatal("GenerateFlightEventDedupeKey() did not panic without a flight key")
+		}
+	}()
+
+	GenerateFlightEventDedupeKey(FlightEventDedupeKeyInput{
+		EventType:              FlightEventTypeStatusUpdated,
+		FAFlightID:             nil,
+		ProvisionalFlightLegID: nil,
+		EventTimestamp:         "2026-04-25T21:50:00Z",
+	})
 }
 
 func baseFlightDurationTimes() FlightTimes {
