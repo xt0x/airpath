@@ -1,10 +1,10 @@
 {
   "source": {
-    "planItem": "L3-02",
+    "fixtureName": "future-schedule-without-fa-flight-id",
     "endpoint": "GET /schedules/{date_start}/{date_end}",
     "verificationDate": "2026-04-28",
     "captureStatus": "openapi-shaped-anonymized-fixture",
-    "note": "The local environment did not provide a FlightAware AeroAPI key, so this fixture preserves the published /schedules response shape and the documented fa_flight_id=null future-flight case. Replace with a sanitized real response when L3 API access is available."
+    "note": "The local environment did not provide a FlightAware AeroAPI key, so this fixture preserves the published /schedules response shape and the documented fa_flight_id=null future-flight case. Replace with a sanitized real response when Personal endpoint verification access is available."
   },
   "response": {
     "links": null,

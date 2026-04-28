@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import scheduleResponse from "./future-without-fa-flight-id.json";
 
-describe("L3-02 future schedule fixture", () => {
+describe("future schedule fixture without a FlightAware flight ID", () => {
   it("captures a future /schedules response where FlightAware has not issued fa_flight_id", () => {
     expect(scheduleResponse.source.endpoint).toBe("GET /schedules/{date_start}/{date_end}");
-    expect(scheduleResponse.source.planItem).toBe("L3-02");
+    expect(scheduleResponse.source.fixtureName).toBe("future-schedule-without-fa-flight-id");
+    expect(scheduleResponse.source).not.toHaveProperty("planItem");
     expect(scheduleResponse.response.scheduled).toHaveLength(2);
 
     for (const flight of scheduleResponse.response.scheduled) {

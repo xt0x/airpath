@@ -1,0 +1,108 @@
+{
+  "source": {
+    "fixtureName": "flight-route-response-cases",
+    "verificationDate": "2026-04-28",
+    "captureStatus": "openapi-shaped-anonymized-fixture",
+    "note": "The local environment did not provide a FlightAware AeroAPI key, so these fixtures preserve the published /flights/{id}/route response shapes and documented route-unavailable behavior. Replace with sanitized real responses when Personal endpoint verification access is available."
+  },
+  "cases": [
+    {
+      "kind": "decoded_with_coordinates",
+      "source": {
+        "endpoint": "GET /flights/{id}/route",
+        "httpStatus": 200
+      },
+      "flightSummary": {
+        "fa_flight_id": "anon_route_coordinates",
+        "route": "FIXA FIXB FIXC"
+      },
+      "routeResponse": {
+        "status": 200,
+        "body": {
+          "route_distance": "2475",
+          "fixes": [
+            {
+              "name": "FIXA",
+              "latitude": 35.0001,
+              "longitude": 139.0001,
+              "distance_from_origin": 0,
+              "distance_this_leg": 0,
+              "distance_to_destination": 2475,
+              "outbound_course": 72,
+              "type": "AIRPORT"
+            },
+            {
+              "name": "FIXB",
+              "latitude": 41.125,
+              "longitude": 150.25,
+              "distance_from_origin": 615,
+              "distance_this_leg": 615,
+              "distance_to_destination": 1860,
+              "outbound_course": 84,
+              "type": "WAYPOINT"
+            },
+            {
+              "name": "FIXC",
+              "latitude": 47.875,
+              "longitude": 170.5,
+              "distance_from_origin": 2475,
+              "distance_this_leg": 1860,
+              "distance_to_destination": 0,
+              "outbound_course": null,
+              "type": "AIRPORT"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "route_string_only",
+      "source": {
+        "endpoint": "GET /flights/{id}/route",
+        "httpStatus": 200
+      },
+      "flightSummary": {
+        "fa_flight_id": "anon_route_string_only",
+        "route": "ANON1 ANON2 ANON3 ANON4"
+      },
+      "routeResponse": {
+        "status": 200,
+        "body": {
+          "route_distance": null,
+          "fixes": [
+            {
+              "name": "ANON1",
+              "latitude": null,
+              "longitude": null,
+              "distance_from_origin": null,
+              "distance_this_leg": null,
+              "distance_to_destination": null,
+              "outbound_course": null,
+              "type": "UNKNOWN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "unavailable",
+      "source": {
+        "endpoint": "GET /flights/{id}/route",
+        "httpStatus": 404
+      },
+      "flightSummary": {
+        "fa_flight_id": "anon_route_unavailable",
+        "route": null
+      },
+      "routeResponse": {
+        "status": 404,
+        "body": {
+          "title": "Not Found",
+          "reason": "NO_ROUTE",
+          "detail": "No route is available for this anonymized fixture flight.",
+          "status": 404
+        }
+      }
+    }
+  ]
+}
