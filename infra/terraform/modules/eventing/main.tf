@@ -1,0 +1,55 @@
+resource "aws_sqs_queue" "fetch_task" {
+  name                       = "${var.name_prefix}-fetch-task"
+  visibility_timeout_seconds = 60
+  message_retention_seconds  = 1209600
+
+  tags = var.tags
+}
+
+resource "aws_lambda_event_source_mapping" "fetcher" {
+  event_source_arn = aws_sqs_queue.fetch_task.arn
+  function_name    = var.fetcher_lambda_arn
+  batch_size       = 1
+  enabled          = true
+}
+
+resource "aws_cloudwatch_event_rule" "dispatcher" {
+  name                = "${var.name_prefix}-dispatcher"
+  description         = "Low-frequency no-op dispatcher shell for due-flight selection."
+  schedule_expression = var.dispatcher_schedule_expression
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "dispatcher" {
+  rule      = aws_cloudwatch_event_rule.dispatcher.name
+  target_id = "dispatcher-lambda"
+  arn       = var.dispatcher_lambda_arn
+}
+
+resource "aws_lambda_permission" "allow_dispatcher_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = var.dispatcher_lambda_function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.dispatcher.arn
+}
+
+data "aws_iam_policy_document" "fetch_task_consume" {
+  statement {
+    actions = [
+      "sqs:ChangeMessageVisibility",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes",
+      "sqs:ReceiveMessage",
+    ]
+
+    resources = [aws_sqs_queue.fetch_task.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "fetcher_queue_consume" {
+  name   = "${var.name_prefix}-fetcher-queue-consume"
+  role   = var.fetcher_lambda_role_name
+  policy = data.aws_iam_policy_document.fetch_task_consume.json
+}
