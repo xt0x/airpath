@@ -38,6 +38,46 @@ resource "aws_cloudwatch_metric_alarm" "flightaware_budget_stop" {
   tags = var.tags
 }
 
+resource "aws_cloudwatch_metric_alarm" "flightaware_budget_soft_threshold" {
+  alarm_name          = "${var.name_prefix}-flightaware-budget-soft-threshold"
+  alarm_description   = "FlightAware estimated monthly spend reached the configured soft threshold."
+  namespace           = var.metric_namespace
+  metric_name         = "EstimatedSpendUSD"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = var.budget_soft_threshold_usd
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = var.alarm_actions
+
+  dimensions = {
+    Environment = var.environment
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "flightaware_budget_hard_stop" {
+  alarm_name          = "${var.name_prefix}-flightaware-budget-hard-stop"
+  alarm_description   = "FlightAware hard stop guard emitted at least one stop event."
+  namespace           = var.metric_namespace
+  metric_name         = "BudgetHardStopCount"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = var.alarm_actions
+
+  dimensions = {
+    Environment = var.environment
+  }
+
+  tags = var.tags
+}
+
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   for_each = toset(var.lambda_function_names)
 
@@ -50,6 +90,28 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   evaluation_periods  = 1
   threshold           = 0
   comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = var.alarm_actions
+
+  dimensions = {
+    FunctionName = each.value
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "lambda_timeouts" {
+  for_each = toset(var.lambda_function_names)
+
+  alarm_name          = "${var.name_prefix}-${each.value}-timeouts"
+  alarm_description   = "Lambda ${each.value} duration is at or above the configured timeout window."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Duration"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 28000
+  comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
   alarm_actions       = var.alarm_actions
 
@@ -78,4 +140,98 @@ resource "aws_cloudwatch_metric_alarm" "fetch_task_dlq_depth" {
   }
 
   tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "fetch_task_queue_age" {
+  alarm_name          = "${var.name_prefix}-fetch-task-queue-age"
+  alarm_description   = "Fetch task queue oldest message age is above the low-frequency polling window."
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 900
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = var.alarm_actions
+
+  dimensions = {
+    QueueName = var.fetch_task_queue_name
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_dashboard" "flightaware" {
+  dashboard_name = "${var.name_prefix}-flightaware-free-allowance"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          title   = "FlightAware Calls And 429s"
+          region  = "$${AWS::Region}"
+          view    = "timeSeries"
+          stacked = false
+          metrics = [
+            [var.metric_namespace, "FlightAwareCallCount", "Environment", var.environment],
+            [".", "RateLimitedCount", ".", "."]
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          title   = "Estimated Spend And Stop State"
+          region  = "$${AWS::Region}"
+          view    = "timeSeries"
+          stacked = false
+          metrics = [
+            [var.metric_namespace, "EstimatedSpendUSD", "Environment", var.environment],
+            [".", "BudgetStopCount", ".", "."],
+            [".", "BudgetHardStopCount", ".", "."]
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Lambda Errors And Timeouts"
+          region = "$${AWS::Region}"
+          view   = "timeSeries"
+          metrics = concat(
+            [
+              for function_name in var.lambda_function_names :
+              ["AWS/Lambda", "Errors", "FunctionName", function_name]
+            ],
+            [
+              for function_name in var.lambda_function_names :
+              [".", "Duration", ".", function_name]
+            ]
+          )
+        }
+      },
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Fetch Queue And DLQ"
+          region = "$${AWS::Region}"
+          view   = "timeSeries"
+          metrics = [
+            ["AWS/SQS", "ApproximateAgeOfOldestMessage", "QueueName", var.fetch_task_queue_name],
+            [".", "ApproximateNumberOfMessagesVisible", ".", var.fetch_task_dlq_name]
+          ]
+        }
+      }
+    ]
+  })
 }

@@ -213,6 +213,7 @@ module "observability" {
     module.dispatcher_lambda.function_name,
   ]
 
-  fetch_task_dlq_name = module.fetch_task_queue.fetch_task_dlq_name
-  tags                = local.common_tags
+  fetch_task_queue_name = module.fetch_task_queue.fetch_task_queue_name
+  fetch_task_dlq_name   = module.fetch_task_queue.fetch_task_dlq_name
+  tags                  = local.common_tags
 }

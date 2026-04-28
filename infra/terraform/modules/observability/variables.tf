@@ -24,6 +24,17 @@ variable "fetch_task_dlq_name" {
   type        = string
 }
 
+variable "fetch_task_queue_name" {
+  description = "Fetch task queue name."
+  type        = string
+}
+
+variable "budget_soft_threshold_usd" {
+  description = "Estimated monthly spend threshold that warns before the hard stop."
+  type        = number
+  default     = 4
+}
+
 variable "alarm_actions" {
   description = "Optional CloudWatch alarm action ARNs."
   type        = list(string)
