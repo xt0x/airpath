@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type {
-  Airport,
-  Flight,
-  FlightTimes,
-  FlightEvent,
-  FlightPosition,
-  FlightSubscription,
-  UserWatch,
-} from "./index.js";
+import type { Airport, Flight, FlightTimes, FlightEvent, FlightPosition } from "./index.js";
 import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./index.js";
 import {
   calculateFlightDuration,
@@ -76,9 +68,6 @@ describe("shared domain models", () => {
       latestPositionTimestamp: null,
       latestPositionSource: null,
       pollState: "scheduled",
-      watcherCount: 0,
-      sessionSubscriberCount: 0,
-      persistentWatcherCount: 0,
       fetchLeaseUntil: null,
       fetchOwner: null,
       nextSummaryPollAt: null,
@@ -131,31 +120,6 @@ describe("shared domain models", () => {
     expect(position.altitudeFeet).toBe(37000);
     expect(position.source).toBe("flightaware_position");
     expect(event.payload["sourceStatus"]).toBe("En Route");
-  });
-
-  it("keeps persistent watches separate from session subscriptions", () => {
-    const watch: UserWatch = {
-      userId: "user_123",
-      flightId: "iflg_8d2a2a3a6c4f",
-      faFlightId: "UAL1234-1234567890-airline-0123",
-      flightIdType: "internal",
-      watchState: "active",
-      createdAt: "2026-04-25T15:00:00Z",
-      updatedAt: "2026-04-25T15:00:00Z",
-      ttl: null,
-    };
-    const subscription: FlightSubscription = {
-      flightId: "iflg_8d2a2a3a6c4f",
-      connectionId: "abc123",
-      userId: "user_123",
-      subscriptionType: "session",
-      createdAt: "2026-04-25T15:01:00Z",
-      lastSeenAt: "2026-04-25T15:02:00Z",
-      ttl: 1770000000,
-    };
-
-    expect(watch.watchState).toBe("active");
-    expect(subscription.subscriptionType).toBe("session");
   });
 });
 
@@ -446,42 +410,36 @@ describe("flight duration calculation", () => {
 });
 
 describe("flight event dedupe key generation", () => {
-  it("generates a stable alert dedupe key from alert event fields", () => {
-    const input = {
-      source: "alert" as const,
-      alertId: "alert-123",
-      eventType: "departure" as const,
-      faFlightId: "UAL1234-1234567890-airline-0123",
-      provisionalFlightLegId: null,
-      eventTimestamp: "2026-04-25T10:08:00Z",
-    };
-
-    expect(generateFlightEventDedupeKey(input)).toBe("79c851e2d0d0");
-    expect(generateFlightEventDedupeKey(input)).toBe(generateFlightEventDedupeKey(input));
-  });
-
   it("uses provisionalFlightLegId when faFlightId is not available", () => {
     expect(
       generateFlightEventDedupeKey({
-        source: "alert",
-        alertId: "alert-999",
         eventType: "departure",
         faFlightId: null,
         provisionalFlightLegId: "sched_3f5a7c8d91ab",
         eventTimestamp: "2026-04-25T10:08:00Z",
       }),
-    ).toBe("cf3f553a88e8");
+    ).toBe("13b84e62b4d0");
   });
 
-  it("generates a stable polling event dedupe key without an alert id", () => {
+  it("generates a stable polling event dedupe key without an external notification id", () => {
     expect(
       generateFlightEventDedupeKey({
-        source: "polling",
         eventType: "arrival",
         faFlightId: "iflg_8d2a2a3a6c4f",
         provisionalFlightLegId: null,
         eventTimestamp: "2026-04-25T21:50:00Z",
       }),
-    ).toBe("71a8a0fd8100");
+    ).toBe("b22238bbb5ee");
+  });
+
+  it("requires a FlightAware or provisional flight key", () => {
+    expect(() =>
+      generateFlightEventDedupeKey({
+        eventType: "status_updated",
+        faFlightId: null,
+        provisionalFlightLegId: null,
+        eventTimestamp: "2026-04-25T21:50:00Z",
+      }),
+    ).toThrow("faFlightId or provisionalFlightLegId is required for event dedupe keys");
   });
 });

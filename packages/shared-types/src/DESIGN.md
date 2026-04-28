@@ -4,7 +4,7 @@ This source directory owns TypeScript domain contracts that are shared by the we
 
 ## L2-01 Domain Model Baseline
 
-The initial domain model exports basic, dependency-free TypeScript types for flights, airports, positions, events, persistent user watches, and WebSocket session subscriptions. These types intentionally keep nullable FlightAware-derived fields as `null` instead of defaulting to empty strings or zero values.
+The initial domain model exports basic, dependency-free TypeScript types for flights, airports, positions, and polling-derived events. The free-allowance MVP intentionally excludes FlightAware Alerts, persistent watches, and WebSocket session subscriptions from the shared domain surface. These types intentionally keep nullable FlightAware-derived fields as `null` instead of defaulting to empty strings or zero values.
 
 All L2 pure helper categories are represented in this package.
 
@@ -52,6 +52,6 @@ The result keeps the duration kind and, when the duration came from timestamps, 
 
 ## L2-07 Event Dedupe Key Generation
 
-Event dedupe helpers generate stable hash keys for alert and polling events. Alert events use `alertId`, `eventType`, `coalesce(faFlightId, provisionalFlightLegId)`, and `eventTimestamp`; polling events use a `polling` discriminator in place of `alertId` so they cannot collide with alerts.
+Event dedupe helpers generate stable hash keys for polling-derived events. The key uses a `polling` discriminator, `eventType`, `coalesce(faFlightId, provisionalFlightLegId)`, and `eventTimestamp`.
 
 When `faFlightId` is unavailable for a provisional scheduled flight, the helper uses `provisionalFlightLegId`, matching the specification. Go mirrors the TypeScript helper behavior in `services/internal/domain`.

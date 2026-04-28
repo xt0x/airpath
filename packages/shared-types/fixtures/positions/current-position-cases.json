@@ -1,0 +1,48 @@
+{
+  "source": {
+    "fixtureName": "current-position-response-cases",
+    "verificationDate": "2026-04-29",
+    "captureStatus": "openapi-shaped-anonymized-fixture",
+    "note": "The local environment did not provide a FlightAware AeroAPI key, so these fixtures preserve the /flights/{id}/position response cases needed for free-allowance MVP position display. Replace with sanitized real responses when Personal endpoint verification access is available."
+  },
+  "cases": [
+    {
+      "kind": "current",
+      "source": {
+        "endpoint": "GET /flights/{id}/position",
+        "httpStatus": 200
+      },
+      "positionResponse": {
+        "status": 200,
+        "body": {
+          "fa_flight_id": "anon_position_current",
+          "ident": "ANON123",
+          "latitude": 45.123,
+          "longitude": 160.456,
+          "altitude": 370,
+          "altitude_change": "level",
+          "groundspeed": 488,
+          "heading": 275,
+          "timestamp": "2026-06-20T09:30:00Z",
+          "update_type": "estimated"
+        }
+      }
+    },
+    {
+      "kind": "unavailable",
+      "source": {
+        "endpoint": "GET /flights/{id}/position",
+        "httpStatus": 404
+      },
+      "positionResponse": {
+        "status": 404,
+        "body": {
+          "title": "Not Found",
+          "reason": "NO_POSITION",
+          "detail": "No current position is available for this anonymized fixture flight.",
+          "status": 404
+        }
+      }
+    }
+  ]
+}

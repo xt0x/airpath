@@ -1,0 +1,39 @@
+{
+  "source": {
+    "fixtureName": "account-usage-response",
+    "endpoint": "GET /account/usage",
+    "verificationDate": "2026-04-29",
+    "captureStatus": "mock-contract-for-free-allowance-guard",
+    "note": "This fixture defines the internal usage-check contract Airpath expects for budget reconciliation. Replace or adapt it to the exact AeroAPI /account/usage schema after Personal endpoint verification access is available."
+  },
+  "response": {
+    "currency": "USD",
+    "period": {
+      "start": "2026-04-01T00:00:00Z",
+      "end": "2026-04-30T23:59:59Z"
+    },
+    "personal_free_allowance_usd": 5.0,
+    "month_to_date": {
+      "result_sets": 30,
+      "estimated_cost_usd": 0.24
+    },
+    "guard": {
+      "soft_stop_threshold_usd": 4.0,
+      "hard_stop_threshold_usd": 4.75,
+      "fetch_disabled": false,
+      "last_reconciled_at": "2026-04-29T00:00:00Z"
+    },
+    "endpoints": [
+      {
+        "endpoint": "GET /flights/{ident}",
+        "result_sets": 12,
+        "estimated_cost_usd": 0.06
+      },
+      {
+        "endpoint": "GET /flights/{id}/position",
+        "result_sets": 18,
+        "estimated_cost_usd": 0.18
+      }
+    ]
+  }
+}

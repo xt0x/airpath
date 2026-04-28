@@ -1,0 +1,63 @@
+{
+  "source": {
+    "fixtureName": "future-schedule-without-fa-flight-id",
+    "endpoint": "GET /schedules/{date_start}/{date_end}",
+    "verificationDate": "2026-04-28",
+    "captureStatus": "openapi-shaped-anonymized-fixture",
+    "note": "The local environment did not provide a FlightAware AeroAPI key, so this fixture preserves the published /schedules response shape and the documented fa_flight_id=null future-flight case. Replace with a sanitized real response when Personal endpoint verification access is available."
+  },
+  "response": {
+    "links": null,
+    "num_pages": 1,
+    "scheduled": [
+      {
+        "ident": "ANON123",
+        "ident_icao": "ANON123",
+        "ident_iata": "ZZ123",
+        "actual_ident": null,
+        "actual_ident_icao": null,
+        "actual_ident_iata": null,
+        "aircraft_type": "A20N",
+        "scheduled_in": "2026-06-20T18:45:00Z",
+        "scheduled_out": "2026-06-20T08:15:00Z",
+        "origin": "AAAA",
+        "origin_icao": "AAAA",
+        "origin_iata": "AAA",
+        "origin_lid": null,
+        "destination": "BBBB",
+        "destination_icao": "BBBB",
+        "destination_iata": "BBB",
+        "destination_lid": null,
+        "fa_flight_id": null,
+        "meal_service": "Unavailable",
+        "seats_cabin_business": 0,
+        "seats_cabin_coach": 180,
+        "seats_cabin_first": 0
+      },
+      {
+        "ident": "ANON456",
+        "ident_icao": "ANON456",
+        "ident_iata": "ZZ456",
+        "actual_ident": "ANON789",
+        "actual_ident_icao": "ANON789",
+        "actual_ident_iata": "ZZ789",
+        "aircraft_type": "B789",
+        "scheduled_in": "2026-06-21T02:20:00Z",
+        "scheduled_out": "2026-06-20T15:30:00Z",
+        "origin": "ACCC",
+        "origin_icao": "ACCC",
+        "origin_iata": "ACC",
+        "origin_lid": null,
+        "destination": "BDDD",
+        "destination_icao": "BDDD",
+        "destination_iata": "BDD",
+        "destination_lid": null,
+        "fa_flight_id": null,
+        "meal_service": "Unavailable",
+        "seats_cabin_business": 28,
+        "seats_cabin_coach": 240,
+        "seats_cabin_first": 0
+      }
+    ]
+  }
+}

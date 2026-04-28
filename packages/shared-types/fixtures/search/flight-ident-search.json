@@ -1,0 +1,107 @@
+{
+  "source": {
+    "fixtureName": "flight-ident-search-response",
+    "endpoint": "GET /flights/{ident}",
+    "verificationDate": "2026-04-29",
+    "captureStatus": "openapi-shaped-anonymized-fixture",
+    "query": {
+      "ident": "ANON123",
+      "max_pages": 1
+    },
+    "note": "The local environment did not provide a FlightAware AeroAPI key, so this fixture preserves the published /flights/{ident} response shape needed for free-allowance MVP search and summary mapping. Replace with a sanitized real response when Personal endpoint verification access is available."
+  },
+  "response": {
+    "links": null,
+    "num_pages": 1,
+    "flights": [
+      {
+        "fa_flight_id": "anon_search_current",
+        "ident": "ANON123",
+        "ident_icao": "ANON123",
+        "ident_iata": "ZZ123",
+        "operator": "ANON",
+        "operator_icao": "ANON",
+        "operator_iata": "ZZ",
+        "flight_number": "123",
+        "registration": "ANONREG",
+        "aircraft_type": "B789",
+        "origin": {
+          "code": "AAAA",
+          "code_icao": "AAAA",
+          "code_iata": "AAA",
+          "code_lid": null,
+          "name": "Anonymous Origin Airport",
+          "timezone": "UTC"
+        },
+        "destination": {
+          "code": "BBBB",
+          "code_icao": "BBBB",
+          "code_iata": "BBB",
+          "code_lid": null,
+          "name": "Anonymous Destination Airport",
+          "timezone": "UTC"
+        },
+        "scheduled_out": "2026-06-20T08:15:00Z",
+        "estimated_out": "2026-06-20T08:20:00Z",
+        "actual_out": "2026-06-20T08:18:00Z",
+        "scheduled_off": "2026-06-20T08:30:00Z",
+        "estimated_off": "2026-06-20T08:35:00Z",
+        "actual_off": "2026-06-20T08:34:00Z",
+        "scheduled_on": "2026-06-20T17:25:00Z",
+        "estimated_on": "2026-06-20T17:20:00Z",
+        "actual_on": null,
+        "scheduled_in": "2026-06-20T17:45:00Z",
+        "estimated_in": "2026-06-20T17:40:00Z",
+        "actual_in": null,
+        "status": "En Route",
+        "progress_percent": 42,
+        "route": "ANON1 ANON2 ANON3",
+        "filed_ete": 33000
+      },
+      {
+        "fa_flight_id": null,
+        "ident": "ANON456",
+        "ident_icao": "ANON456",
+        "ident_iata": "ZZ456",
+        "operator": "ANON",
+        "operator_icao": "ANON",
+        "operator_iata": "ZZ",
+        "flight_number": "456",
+        "registration": null,
+        "aircraft_type": null,
+        "origin": {
+          "code": "CCCC",
+          "code_icao": "CCCC",
+          "code_iata": "CCC",
+          "code_lid": null,
+          "name": null,
+          "timezone": "UTC"
+        },
+        "destination": {
+          "code": "DDDD",
+          "code_icao": "DDDD",
+          "code_iata": "DDD",
+          "code_lid": null,
+          "name": null,
+          "timezone": "UTC"
+        },
+        "scheduled_out": "2026-06-21T08:15:00Z",
+        "estimated_out": null,
+        "actual_out": null,
+        "scheduled_off": null,
+        "estimated_off": null,
+        "actual_off": null,
+        "scheduled_on": null,
+        "estimated_on": null,
+        "actual_on": null,
+        "scheduled_in": "2026-06-21T17:45:00Z",
+        "estimated_in": null,
+        "actual_in": null,
+        "status": "Scheduled",
+        "progress_percent": null,
+        "route": null,
+        "filed_ete": null
+      }
+    ]
+  }
+}

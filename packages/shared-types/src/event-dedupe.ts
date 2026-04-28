@@ -1,14 +1,11 @@
 import type {
   FAFlightID,
-  FlightEventSource,
   FlightEventType,
   ISODateTimeString,
   ProvisionalFlightLegID,
 } from "./index.js";
 
 export interface FlightEventDedupeKeyInput {
-  source: FlightEventSource;
-  alertId?: string | null;
   eventType: FlightEventType;
   faFlightId: FAFlightID | null;
   provisionalFlightLegId: ProvisionalFlightLegID | null;
@@ -17,20 +14,11 @@ export interface FlightEventDedupeKeyInput {
 
 export function generateFlightEventDedupeKey(input: FlightEventDedupeKeyInput): string {
   return hashDedupeKeyParts([
-    input.source,
-    input.source === "alert" ? requireAlertId(input.alertId) : "polling",
+    "polling",
     input.eventType,
     requireFlightKey(input.faFlightId, input.provisionalFlightLegId),
     input.eventTimestamp,
   ]);
-}
-
-function requireAlertId(alertId: string | null | undefined): string {
-  if (alertId === null || alertId === undefined || alertId.length === 0) {
-    throw new Error("alertId is required for alert event dedupe keys");
-  }
-
-  return alertId;
 }
 
 function requireFlightKey(

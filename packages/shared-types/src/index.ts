@@ -4,8 +4,6 @@ export type FlightID = string;
 export type InternalFlightLegID = string;
 export type ProvisionalFlightLegID = string;
 export type FAFlightID = string;
-export type UserID = string;
-export type ConnectionID = string;
 export type AirportCode = string;
 
 export type FlightIDType = "internal" | "provisional";
@@ -20,7 +18,7 @@ export type FlightPollState =
   | "completed"
   | "error";
 
-export type PositionSource = "flightaware_position" | "flightaware_track" | "alert" | "manual";
+export type PositionSource = "flightaware_position" | "flightaware_track" | "manual";
 
 export type PositionUpdateType = "actual" | "estimated" | "predicted" | "surface";
 
@@ -37,11 +35,7 @@ export type FlightEventType =
   | "arrival_delay"
   | "status_updated";
 
-export type FlightEventSource = "polling" | "alert";
-
-export type WatchState = "active" | "paused" | "removed";
-
-export type SubscriptionType = "session";
+export type FlightEventSource = "polling";
 
 export interface Airport {
   code: AirportCode;
@@ -89,9 +83,6 @@ export interface Flight {
   latestPositionTimestamp: ISODateTimeString | null;
   latestPositionSource: PositionSource | null;
   pollState: FlightPollState | null;
-  watcherCount: number;
-  sessionSubscriberCount: number;
-  persistentWatcherCount: number;
   fetchLeaseUntil: ISODateTimeString | null;
   fetchOwner: string | null;
   nextSummaryPollAt: ISODateTimeString | null;
@@ -133,27 +124,6 @@ export interface FlightEvent {
   source: FlightEventSource;
   appliedToFlightState: boolean;
   createdAt: ISODateTimeString;
-}
-
-export interface UserWatch {
-  userId: UserID;
-  flightId: FlightID;
-  faFlightId: FAFlightID | null;
-  flightIdType: FlightIDType;
-  watchState: WatchState;
-  createdAt: ISODateTimeString;
-  updatedAt: ISODateTimeString;
-  ttl: EpochSeconds | null;
-}
-
-export interface FlightSubscription {
-  flightId: FlightID;
-  connectionId: ConnectionID;
-  userId: UserID;
-  subscriptionType: SubscriptionType;
-  createdAt: ISODateTimeString;
-  lastSeenAt: ISODateTimeString;
-  ttl: EpochSeconds | null;
 }
 
 export { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./id-generation.js";
