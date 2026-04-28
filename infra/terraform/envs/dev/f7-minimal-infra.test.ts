@@ -15,6 +15,7 @@ describe("F7-01..04 dev infrastructure contract", () => {
   const dynamodbMain = readTerraformFile("modules/data-dynamodb/main.tf");
   const storageMain = readTerraformFile("modules/storage-s3/main.tf");
   const secretsMain = readTerraformFile("modules/secrets/main.tf");
+  const observabilityMain = readTerraformFile("modules/observability/main.tf");
 
   it("routes /v1/* HTTP API traffic to the Go API Lambda integration", () => {
     expect(devMain).toContain('module "http_api"');
@@ -84,5 +85,27 @@ describe("F7-01..04 dev infrastructure contract", () => {
     expect(devVariables).toContain("flightaware_api_key_secret_name");
     expect(devVariables).not.toMatch(/flightaware_api_key\\s*=|api_key_value/i);
     expect(devOutputs).toContain("flightaware_api_key_secret_arn");
+  });
+
+  it("creates CloudWatch alarms for 429, budget stop, Lambda errors, and DLQ depth", () => {
+    expect(devMain).toContain('module "observability"');
+    expect(observabilityMain).toContain(
+      'resource "aws_cloudwatch_metric_alarm" "flightaware_rate_limited"',
+    );
+    expect(observabilityMain).toContain('metric_name         = "RateLimitedCount"');
+    expect(observabilityMain).toContain(
+      'resource "aws_cloudwatch_metric_alarm" "flightaware_budget_stop"',
+    );
+    expect(observabilityMain).toContain('metric_name         = "BudgetStopCount"');
+    expect(observabilityMain).toContain('resource "aws_cloudwatch_metric_alarm" "lambda_errors"');
+    expect(observabilityMain).toContain('metric_name         = "Errors"');
+    expect(observabilityMain).toContain(
+      'resource "aws_cloudwatch_metric_alarm" "fetch_task_dlq_depth"',
+    );
+    expect(observabilityMain).toContain(
+      'metric_name         = "ApproximateNumberOfMessagesVisible"',
+    );
+    expect(eventingMain).toContain('resource "aws_sqs_queue" "fetch_task_dlq"');
+    expect(devOutputs).toContain("cloudwatch_alarm_names");
   });
 });

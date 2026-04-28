@@ -47,3 +47,8 @@ output "flightaware_api_key_secret_arn" {
   description = "Secrets Manager secret ARN for the FlightAware API key."
   value       = module.secret_references.flightaware_api_key_secret_arn
 }
+
+output "cloudwatch_alarm_names" {
+  description = "CloudWatch alarm names for dev monitoring."
+  value       = module.observability.alarm_names
+}

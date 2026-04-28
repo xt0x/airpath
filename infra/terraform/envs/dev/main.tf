@@ -200,3 +200,19 @@ module "http_api" {
   stage_name               = "$default"
   tags                     = local.common_tags
 }
+
+module "observability" {
+  source = "../../modules/observability"
+
+  name_prefix = local.name_prefix
+  environment = var.environment
+
+  lambda_function_names = [
+    module.api_lambda.function_name,
+    module.fetcher_lambda.function_name,
+    module.dispatcher_lambda.function_name,
+  ]
+
+  fetch_task_dlq_name = module.fetch_task_queue.fetch_task_dlq_name
+  tags                = local.common_tags
+}

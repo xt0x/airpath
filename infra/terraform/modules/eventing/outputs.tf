@@ -13,6 +13,11 @@ output "fetch_task_dlq_arn" {
   value       = aws_sqs_queue.fetch_task_dlq.arn
 }
 
+output "fetch_task_dlq_name" {
+  description = "Fetch task dead-letter queue name."
+  value       = aws_sqs_queue.fetch_task_dlq.name
+}
+
 output "fetch_task_dlq_url" {
   description = "Fetch task dead-letter queue URL."
   value       = aws_sqs_queue.fetch_task_dlq.url
