@@ -200,6 +200,51 @@ func TestDynamoDBRepositoryRecordsUsageEstimatesIntoMonthlyBudgetState(t *testin
 	}
 }
 
+func TestDynamoDBRepositoryReconcilesAccountUsageWithoutLoweringLocalEstimate(t *testing.T) {
+	ctx := context.Background()
+	scope := application.UsageBudgetScope{Environment: "dev", Month: "2026-04"}
+	repo := NewScopedDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{UsageBudget: "UsageBudget"}, scope)
+
+	if err := repo.PutMonthlyUsageStatus(ctx, scope, application.UsageStatus{
+		Budget: application.UsageBudgetStatus{
+			Currency:                 "USD",
+			EstimatedMonthToDateCost: 3.50,
+			SoftStopThreshold:        application.DefaultSoftStopThresholdUSD,
+		},
+		FetchingEnabled: true,
+	}); err != nil {
+		t.Fatalf("PutMonthlyUsageStatus() error = %v", err)
+	}
+
+	if err := repo.ReconcileAccountUsage(ctx, scope, flightaware.UsageResponse{
+		Currency:    "USD",
+		MonthToDate: flightaware.UsageAmount{EstimatedCostUSD: 2.25, ResultSets: 10},
+	}); err != nil {
+		t.Fatalf("ReconcileAccountUsage(lower remote) error = %v", err)
+	}
+	status, err := repo.GetMonthlyUsageStatus(ctx, scope)
+	if err != nil {
+		t.Fatalf("GetMonthlyUsageStatus() error = %v", err)
+	}
+	if status.Budget.EstimatedMonthToDateCost != 3.50 {
+		t.Fatalf("estimated cost after lower remote = %v, want local 3.50", status.Budget.EstimatedMonthToDateCost)
+	}
+
+	if err := repo.ReconcileAccountUsage(ctx, scope, flightaware.UsageResponse{
+		Currency:    "USD",
+		MonthToDate: flightaware.UsageAmount{EstimatedCostUSD: 4.25, ResultSets: 20},
+	}); err != nil {
+		t.Fatalf("ReconcileAccountUsage(higher remote) error = %v", err)
+	}
+	status, err = repo.GetMonthlyUsageStatus(ctx, scope)
+	if err != nil {
+		t.Fatalf("GetMonthlyUsageStatus() after higher remote error = %v", err)
+	}
+	if status.Budget.EstimatedMonthToDateCost != 4.25 || !status.Budget.Stopped || status.FetchingEnabled {
+		t.Fatalf("usage status after higher remote = %#v, want stopped at 4.25", status)
+	}
+}
+
 func testFlight(id domain.FlightID, ident string) domain.Flight {
 	internalID := domain.InternalFlightLegID(id)
 	faFlightID := domain.FAFlightID("fa_aws_1")

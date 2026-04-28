@@ -29,28 +29,35 @@ type UsageGuard interface {
 	GetUsageStatus(context.Context) (UsageStatus, error)
 }
 
+type FetchPolicy interface {
+	FetchTaskAllowed(context.Context, FetchTaskType, FetchReason) (bool, error)
+}
+
 type Config struct {
-	Flights    FlightStore
-	MapData    MapDataStore
-	Positions  PositionStore
-	FetchTasks FetchTaskQueue
-	UsageGuard UsageGuard
+	Flights     FlightStore
+	MapData     MapDataStore
+	Positions   PositionStore
+	FetchTasks  FetchTaskQueue
+	UsageGuard  UsageGuard
+	FetchPolicy FetchPolicy
 }
 
 type Application struct {
-	flights    FlightStore
-	mapData    MapDataStore
-	positions  PositionStore
-	fetchTasks FetchTaskQueue
-	usageGuard UsageGuard
+	flights     FlightStore
+	mapData     MapDataStore
+	positions   PositionStore
+	fetchTasks  FetchTaskQueue
+	usageGuard  UsageGuard
+	fetchPolicy FetchPolicy
 }
 
 func New(config Config) *Application {
 	return &Application{
-		flights:    config.Flights,
-		mapData:    config.MapData,
-		positions:  config.Positions,
-		fetchTasks: config.FetchTasks,
-		usageGuard: config.UsageGuard,
+		flights:     config.Flights,
+		mapData:     config.MapData,
+		positions:   config.Positions,
+		fetchTasks:  config.FetchTasks,
+		usageGuard:  config.UsageGuard,
+		fetchPolicy: config.FetchPolicy,
 	}
 }

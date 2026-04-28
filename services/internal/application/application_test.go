@@ -131,16 +131,121 @@ func TestRequestFlightRefreshCreatesDedupedTasksOnlyWhenBudgetAllows(t *testing.
 	if len(deps.queue.tasks) != 2 {
 		t.Fatalf("enqueued task count = %d, want 2", len(deps.queue.tasks))
 	}
+	if response.AcceptedTasks[0].IdempotencyKey != "refresh:iflg_1:route:2026-04-29T00:00:00Z" {
+		t.Fatalf("route idempotency key = %q, want window-based key", response.AcceptedTasks[0].IdempotencyKey)
+	}
 
 	deps.budget.fetchingEnabled = false
-	_, err = app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+	stale, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
 		FlightID:     flight.FlightID,
 		TaskTypes:    []FetchTaskType{FetchTaskTrack},
 		ClientReason: FetchReasonUserManualRefresh,
 		RequestedAt:  "2026-04-29T00:01:00Z",
 	})
-	if !errors.Is(err, ErrBudgetExceeded) {
-		t.Fatalf("RequestFlightRefresh(disabled) error = %v, want ErrBudgetExceeded", err)
+	if err != nil {
+		t.Fatalf("RequestFlightRefresh(disabled with cache) error = %v", err)
+	}
+	if len(stale.AcceptedTasks) != 0 || stale.Cache.Freshness != CacheFreshnessStale || !stale.Cache.Stale {
+		t.Fatalf("disabled refresh response = %#v, want stale cached response without tasks", stale)
+	}
+}
+
+func TestRequestFlightRefreshDedupesSameFlightKindAndWindowAcrossRequests(t *testing.T) {
+	app, deps := newTestApp()
+	flight := testFlight("iflg_1", "ANA110")
+	deps.flights.byID[flight.FlightID] = flight
+
+	first, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+		FlightID:      flight.FlightID,
+		TaskTypes:     []FetchTaskType{FetchTaskRoute},
+		ClientReason:  FetchReasonUserManualRefresh,
+		RequestedAt:   "2026-04-29T00:00:30Z",
+		IdempotencyID: "req-1",
+	})
+	if err != nil {
+		t.Fatalf("first RequestFlightRefresh() error = %v", err)
+	}
+	second, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+		FlightID:      flight.FlightID,
+		TaskTypes:     []FetchTaskType{FetchTaskRoute},
+		ClientReason:  FetchReasonUserManualRefresh,
+		RequestedAt:   "2026-04-29T00:04:59Z",
+		IdempotencyID: "req-2",
+	})
+	if err != nil {
+		t.Fatalf("second RequestFlightRefresh() error = %v", err)
+	}
+	third, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+		FlightID:      flight.FlightID,
+		TaskTypes:     []FetchTaskType{FetchTaskRoute},
+		ClientReason:  FetchReasonUserManualRefresh,
+		RequestedAt:   "2026-04-29T00:05:00Z",
+		IdempotencyID: "req-3",
+	})
+	if err != nil {
+		t.Fatalf("third RequestFlightRefresh() error = %v", err)
+	}
+
+	if len(first.AcceptedTasks) != 1 || len(second.AcceptedTasks) != 0 || len(third.AcceptedTasks) != 1 {
+		t.Fatalf("accepted counts = %d, %d, %d; want 1, 0, 1", len(first.AcceptedTasks), len(second.AcceptedTasks), len(third.AcceptedTasks))
+	}
+	if len(deps.queue.tasks) != 2 {
+		t.Fatalf("enqueued task count = %d, want 2", len(deps.queue.tasks))
+	}
+}
+
+func TestRequestFlightRefreshHonorsLowPriorityKillSwitch(t *testing.T) {
+	policy := NewRuntimeFetchPolicy(RuntimeFetchConfig{
+		RouteFetchEnabled:      false,
+		TrackFetchEnabled:      false,
+		BackgroundFetchEnabled: false,
+	})
+	app, deps := newTestAppWithPolicy(policy)
+	flight := testFlight("iflg_1", "ANA110")
+	deps.flights.byID[flight.FlightID] = flight
+
+	response, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+		FlightID:      flight.FlightID,
+		TaskTypes:     []FetchTaskType{FetchTaskRoute, FetchTaskTrack, FetchTaskPosition},
+		ClientReason:  FetchReasonUserManualRefresh,
+		RequestedAt:   "2026-04-29T00:00:00Z",
+		IdempotencyID: "req-1",
+	})
+	if err != nil {
+		t.Fatalf("RequestFlightRefresh() error = %v", err)
+	}
+
+	if len(response.AcceptedTasks) != 1 || response.AcceptedTasks[0].TaskType != FetchTaskPosition {
+		t.Fatalf("accepted tasks = %#v, want only position", response.AcceptedTasks)
+	}
+
+	background, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+		FlightID:      flight.FlightID,
+		TaskTypes:     []FetchTaskType{FetchTaskPosition},
+		ClientReason:  FetchReasonLowFrequencyPoll,
+		RequestedAt:   "2026-04-29T00:05:00Z",
+		IdempotencyID: "req-2",
+	})
+	if err != nil {
+		t.Fatalf("background RequestFlightRefresh() error = %v", err)
+	}
+	if len(background.AcceptedTasks) != 0 {
+		t.Fatalf("background accepted tasks = %#v, want none", background.AcceptedTasks)
+	}
+
+	policy.Update(RuntimeFetchConfig{RouteFetchEnabled: true, TrackFetchEnabled: true, BackgroundFetchEnabled: true})
+	resumed, err := app.RequestFlightRefresh(context.Background(), FlightRefreshInput{
+		FlightID:      flight.FlightID,
+		TaskTypes:     []FetchTaskType{FetchTaskRoute},
+		ClientReason:  FetchReasonUserManualRefresh,
+		RequestedAt:   "2026-04-29T00:10:00Z",
+		IdempotencyID: "req-3",
+	})
+	if err != nil {
+		t.Fatalf("resumed RequestFlightRefresh() error = %v", err)
+	}
+	if len(resumed.AcceptedTasks) != 1 || resumed.AcceptedTasks[0].TaskType != FetchTaskRoute {
+		t.Fatalf("resumed accepted tasks = %#v, want route", resumed.AcceptedTasks)
 	}
 }
 
@@ -207,6 +312,10 @@ type testDeps struct {
 }
 
 func newTestApp() (*Application, testDeps) {
+	return newTestAppWithPolicy(nil)
+}
+
+func newTestAppWithPolicy(policy FetchPolicy) (*Application, testDeps) {
 	deps := testDeps{
 		flights:   newMemoryFlightStore(),
 		mapData:   newMemoryMapDataStore(),
@@ -221,11 +330,12 @@ func newTestApp() (*Application, testDeps) {
 		},
 	}
 	return New(Config{
-		Flights:    deps.flights,
-		MapData:    deps.mapData,
-		Positions:  deps.positions,
-		FetchTasks: deps.queue,
-		UsageGuard: deps.budget,
+		Flights:     deps.flights,
+		MapData:     deps.mapData,
+		Positions:   deps.positions,
+		FetchTasks:  deps.queue,
+		UsageGuard:  deps.budget,
+		FetchPolicy: policy,
 	}), deps
 }
 

@@ -4,6 +4,7 @@ The `awsintegration` package contains adapter code that translates application p
 
 - DynamoDB repository methods serialize cached flights, lookup rows, latest positions, and monthly usage budget state by environment and month.
 - The usage budget repository normalizes the default USD 4.00 soft stop threshold and can record local FlightAware call estimates before upstream fetches.
+- Usage reconciliation compares local estimates with FlightAware account usage and keeps the higher month-to-date cost so delayed remote usage cannot reduce the local guard.
 - S3 GeoJSON repository stores and loads route and track map layers under `routes/` and `tracks/` keys.
 - SQS fetch task queue performs local idempotency checks before sending task messages.
 - Secrets adapter returns raw secret values to callers while logging only secret references.
