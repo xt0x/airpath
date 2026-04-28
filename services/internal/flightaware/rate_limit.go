@@ -15,15 +15,27 @@ type RateLimitState interface {
 type MemoryRateLimitState struct {
 	mu      sync.RWMutex
 	stopped map[Endpoint]string
+	resetAt map[Endpoint]time.Time
 }
 
 func NewMemoryRateLimitState() *MemoryRateLimitState {
-	return &MemoryRateLimitState{stopped: map[Endpoint]string{}}
+	return &MemoryRateLimitState{
+		stopped: map[Endpoint]string{},
+		resetAt: map[Endpoint]time.Time{},
+	}
 }
 
 func (s *MemoryRateLimitState) IsStopped(endpoint Endpoint) bool {
+	return s.isStoppedAt(endpoint, time.Now())
+}
+
+func (s *MemoryRateLimitState) isStoppedAt(endpoint Endpoint, now time.Time) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	until, hasResetAt := s.resetAt[endpoint]
+	if hasResetAt && now.After(until) {
+		return false
+	}
 	_, ok := s.stopped[endpoint]
 	return ok
 }
@@ -35,7 +47,31 @@ func (s *MemoryRateLimitState) Stop(endpoint Endpoint, reason string) {
 }
 
 func (s *MemoryRateLimitState) MarkRateLimited(endpoint Endpoint, until time.Time) {
-	s.Stop(endpoint, until.Format(time.RFC3339))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.markStopped(endpoint, until)
+	for _, lowPriorityEndpoint := range lowPriorityEndpoints() {
+		s.markStopped(lowPriorityEndpoint, until)
+	}
+}
+
+func (s *MemoryRateLimitState) ResetAt(endpoint Endpoint) *time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	until, ok := s.resetAt[endpoint]
+	if !ok {
+		return nil
+	}
+	return &until
+}
+
+func (s *MemoryRateLimitState) markStopped(endpoint Endpoint, until time.Time) {
+	s.stopped[endpoint] = until.Format(time.RFC3339)
+	s.resetAt[endpoint] = until
+}
+
+func lowPriorityEndpoints() []Endpoint {
+	return []Endpoint{EndpointRoute, EndpointTrack, EndpointSchedule}
 }
 
 type RateLimitedClient struct {

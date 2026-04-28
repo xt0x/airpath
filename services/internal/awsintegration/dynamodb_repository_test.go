@@ -6,6 +6,7 @@ import (
 
 	"airpath/services/internal/application"
 	"airpath/services/internal/domain"
+	"airpath/services/internal/flightaware"
 )
 
 func TestDynamoDBRepositoriesReadAndWriteFlightsLookupPositionsAndUsageBudget(t *testing.T) {
@@ -78,6 +79,124 @@ func TestDynamoDBRepositoriesReadAndWriteFlightsLookupPositionsAndUsageBudget(t 
 	}
 	if gotUsage.Budget.EstimatedMonthToDateCost != 2.5 || !gotUsage.FetchingEnabled {
 		t.Fatalf("usage = %#v", gotUsage)
+	}
+}
+
+func TestDynamoDBRepositoryStoresMonthlyBudgetStateByEnvironmentAndMonth(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryDynamoDBClient()
+	repo := NewScopedDynamoDBRepository(client, DynamoDBTables{UsageBudget: "UsageBudget"}, application.UsageBudgetScope{
+		Environment: "dev",
+		Month:       "2026-04",
+	})
+
+	devApril := application.UsageStatus{
+		Budget: application.UsageBudgetStatus{
+			Currency:                 "USD",
+			EstimatedMonthToDateCost: 1.25,
+		},
+		FetchingEnabled: true,
+	}
+	prodApril := application.UsageStatus{
+		Budget: application.UsageBudgetStatus{
+			Currency:                 "USD",
+			EstimatedMonthToDateCost: 3.75,
+		},
+		FetchingEnabled: true,
+	}
+
+	if err := repo.PutMonthlyUsageStatus(ctx, application.UsageBudgetScope{Environment: "dev", Month: "2026-04"}, devApril); err != nil {
+		t.Fatalf("PutMonthlyUsageStatus(dev) error = %v", err)
+	}
+	if err := repo.PutMonthlyUsageStatus(ctx, application.UsageBudgetScope{Environment: "prod", Month: "2026-04"}, prodApril); err != nil {
+		t.Fatalf("PutMonthlyUsageStatus(prod) error = %v", err)
+	}
+
+	got, err := repo.GetUsageStatus(ctx)
+	if err != nil {
+		t.Fatalf("GetUsageStatus() error = %v", err)
+	}
+	if got.Budget.Environment != "dev" || got.Budget.Month != "2026-04" {
+		t.Fatalf("scope = %s/%s, want dev/2026-04", got.Budget.Environment, got.Budget.Month)
+	}
+	if got.Budget.EstimatedMonthToDateCost != 1.25 {
+		t.Fatalf("estimated cost = %v, want 1.25", got.Budget.EstimatedMonthToDateCost)
+	}
+
+	prodGot, err := repo.GetMonthlyUsageStatus(ctx, application.UsageBudgetScope{Environment: "prod", Month: "2026-04"})
+	if err != nil {
+		t.Fatalf("GetMonthlyUsageStatus(prod) error = %v", err)
+	}
+	if prodGot.Budget.EstimatedMonthToDateCost != 3.75 {
+		t.Fatalf("prod estimated cost = %v, want 3.75", prodGot.Budget.EstimatedMonthToDateCost)
+	}
+}
+
+func TestDynamoDBRepositorySoftStopThresholdDisablesNewFetches(t *testing.T) {
+	ctx := context.Background()
+	repo := NewScopedDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{UsageBudget: "UsageBudget"}, application.UsageBudgetScope{
+		Environment: "dev",
+		Month:       "2026-04",
+	})
+
+	if err := repo.PutMonthlyUsageStatus(ctx, application.UsageBudgetScope{Environment: "dev", Month: "2026-04"}, application.UsageStatus{
+		Budget: application.UsageBudgetStatus{
+			Currency:                 "USD",
+			EstimatedMonthToDateCost: application.DefaultSoftStopThresholdUSD,
+		},
+		FetchingEnabled: true,
+	}); err != nil {
+		t.Fatalf("PutMonthlyUsageStatus() error = %v", err)
+	}
+
+	allowed, err := repo.FetchingAllowed(ctx)
+	if err != nil {
+		t.Fatalf("FetchingAllowed() error = %v", err)
+	}
+	if allowed {
+		t.Fatal("FetchingAllowed() = true, want false at the default soft stop threshold")
+	}
+
+	status, err := repo.GetUsageStatus(ctx)
+	if err != nil {
+		t.Fatalf("GetUsageStatus() error = %v", err)
+	}
+	if status.Budget.SoftStopThreshold != application.DefaultSoftStopThresholdUSD || !status.Budget.Stopped || status.FetchingEnabled {
+		t.Fatalf("usage status = %#v, want default threshold stop", status)
+	}
+}
+
+func TestDynamoDBRepositoryRecordsUsageEstimatesIntoMonthlyBudgetState(t *testing.T) {
+	ctx := context.Background()
+	scope := application.UsageBudgetScope{Environment: "dev", Month: "2026-04"}
+	repo := NewScopedDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{UsageBudget: "UsageBudget"}, scope)
+
+	if err := repo.RecordFlightAwareCall(ctx, flightaware.UsageCallRecord{
+		Endpoint:            flightaware.EndpointSearch,
+		Phase:               flightaware.UsageRecordPhaseBefore,
+		EstimatedResultSets: 1,
+		EstimatedCostUSD:    0.75,
+	}); err != nil {
+		t.Fatalf("RecordFlightAwareCall(before) error = %v", err)
+	}
+	if err := repo.RecordFlightAwareCall(ctx, flightaware.UsageCallRecord{
+		Endpoint:         flightaware.EndpointSearch,
+		Phase:            flightaware.UsageRecordPhaseAfter,
+		EstimatedCostUSD: 0.75,
+		Succeeded:        true,
+	}); err != nil {
+		t.Fatalf("RecordFlightAwareCall(after) error = %v", err)
+	}
+
+	status, err := repo.GetMonthlyUsageStatus(ctx, scope)
+	if err != nil {
+		t.Fatalf("GetMonthlyUsageStatus() error = %v", err)
+	}
+	if status.Budget.EstimatedMonthToDateCost != 0.75 {
+		t.Fatalf("estimated cost = %v, want 0.75", status.Budget.EstimatedMonthToDateCost)
+	}
+	if !status.FetchingEnabled || status.Budget.SoftStopThreshold != application.DefaultSoftStopThresholdUSD {
+		t.Fatalf("usage status = %#v", status)
 	}
 }
 

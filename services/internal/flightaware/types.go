@@ -17,6 +17,8 @@ const (
 	EndpointUsage    Endpoint = "usage"
 )
 
+const DefaultMaxPages = 1
+
 var (
 	ErrFixtureNotFound          = errors.New("flightaware fixture not found")
 	ErrMaxPagesExceeded         = errors.New("flightaware max_pages must be exactly 1")

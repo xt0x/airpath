@@ -91,6 +91,23 @@ describe("F4 MVP API contract", () => {
     ]);
   });
 
+  it("exposes monthly usage budget scope in usage status", () => {
+    const usageBudgetSchema = apiContract.components.schemas.UsageStatusResponse.properties.budget;
+
+    expect(usageBudgetSchema.required).toEqual([
+      "environment",
+      "month",
+      "currency",
+      "estimatedMonthToDateCost",
+      "softStopThreshold",
+      "stopped",
+    ]);
+    expect(usageBudgetSchema.properties).toMatchObject({
+      environment: { type: "string", minLength: 1 },
+      month: { type: "string", pattern: "^\\d{4}-\\d{2}$" },
+    });
+  });
+
   it("explicitly keeps WebSocket and FlightAware Alerts outside the MVP contract", () => {
     expect(mvpExcludedContracts).toEqual(["websocket", "flightaware_alerts"]);
     expect(Object.keys(apiContract.paths).join("\n")).not.toMatch(/realtime|websocket|alerts/i);

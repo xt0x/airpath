@@ -3,9 +3,11 @@ package awsintegration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"airpath/services/internal/application"
 	"airpath/services/internal/domain"
+	"airpath/services/internal/flightaware"
 )
 
 type DynamoDBTables struct {
@@ -16,12 +18,17 @@ type DynamoDBTables struct {
 }
 
 type DynamoDBRepository struct {
-	client DynamoDBClient
-	tables DynamoDBTables
+	client     DynamoDBClient
+	tables     DynamoDBTables
+	usageScope application.UsageBudgetScope
 }
 
 func NewDynamoDBRepository(client DynamoDBClient, tables DynamoDBTables) *DynamoDBRepository {
 	return &DynamoDBRepository{client: client, tables: tables}
+}
+
+func NewScopedDynamoDBRepository(client DynamoDBClient, tables DynamoDBTables, usageScope application.UsageBudgetScope) *DynamoDBRepository {
+	return &DynamoDBRepository{client: client, tables: tables, usageScope: usageScope}
 }
 
 func (r *DynamoDBRepository) PutFlight(ctx context.Context, flight domain.Flight) error {
@@ -93,13 +100,23 @@ func (r *DynamoDBRepository) GetLatestPosition(ctx context.Context, flightID dom
 }
 
 func (r *DynamoDBRepository) PutUsageStatus(ctx context.Context, scope string, status application.UsageStatus) error {
+	status = application.NormalizeUsageStatus(status)
 	return r.client.PutItem(ctx, r.tables.UsageBudget, map[string]any{
 		"budgetScope": scope,
 		"body":        mustJSON(status),
 	})
 }
 
+func (r *DynamoDBRepository) PutMonthlyUsageStatus(ctx context.Context, scope application.UsageBudgetScope, status application.UsageStatus) error {
+	status.Budget.Environment = scope.Environment
+	status.Budget.Month = scope.Month
+	return r.PutUsageStatus(ctx, scope.Key(), status)
+}
+
 func (r *DynamoDBRepository) GetUsageStatus(ctx context.Context) (application.UsageStatus, error) {
+	if r.usageScope.Key() != "" {
+		return r.GetMonthlyUsageStatus(ctx, r.usageScope)
+	}
 	items, err := r.client.QueryByPrefix(ctx, r.tables.UsageBudget, "budgetScope", "")
 	if err != nil {
 		return application.UsageStatus{}, err
@@ -111,7 +128,24 @@ func (r *DynamoDBRepository) GetUsageStatus(ctx context.Context) (application.Us
 	if err := json.Unmarshal([]byte(stringValue(items[len(items)-1]["body"])), &status); err != nil {
 		return application.UsageStatus{}, err
 	}
-	return status, nil
+	return application.NormalizeUsageStatus(status), nil
+}
+
+func (r *DynamoDBRepository) GetMonthlyUsageStatus(ctx context.Context, scope application.UsageBudgetScope) (application.UsageStatus, error) {
+	item, ok, err := r.client.GetItem(ctx, r.tables.UsageBudget, "budgetScope", scope.Key())
+	if err != nil {
+		return application.UsageStatus{}, err
+	}
+	if !ok {
+		return application.UsageStatus{}, application.ErrNotFound
+	}
+	var status application.UsageStatus
+	if err := json.Unmarshal([]byte(stringValue(item["body"])), &status); err != nil {
+		return application.UsageStatus{}, err
+	}
+	status.Budget.Environment = scope.Environment
+	status.Budget.Month = scope.Month
+	return application.NormalizeUsageStatus(status), nil
 }
 
 func (r *DynamoDBRepository) FetchingAllowed(ctx context.Context) (bool, error) {
@@ -122,7 +156,35 @@ func (r *DynamoDBRepository) FetchingAllowed(ctx context.Context) (bool, error) 
 		}
 		return false, err
 	}
+	status = application.NormalizeUsageStatus(status)
 	return status.FetchingEnabled && !status.Budget.Stopped, nil
+}
+
+func (r *DynamoDBRepository) RecordFlightAwareCall(ctx context.Context, record flightaware.UsageCallRecord) error {
+	if record.Phase != flightaware.UsageRecordPhaseBefore {
+		return nil
+	}
+	scope := r.usageScope
+	if scope.Key() == "" {
+		return application.ErrValidation
+	}
+	status, err := r.GetMonthlyUsageStatus(ctx, scope)
+	if err != nil {
+		if !errors.Is(err, application.ErrNotFound) {
+			return err
+		}
+		status = application.UsageStatus{
+			Budget: application.UsageBudgetStatus{
+				Environment:       scope.Environment,
+				Month:             scope.Month,
+				Currency:          "USD",
+				SoftStopThreshold: application.DefaultSoftStopThresholdUSD,
+			},
+			FetchingEnabled: true,
+		}
+	}
+	status.Budget.EstimatedMonthToDateCost += record.EstimatedCostUSD
+	return r.PutMonthlyUsageStatus(ctx, scope, status)
 }
 
 func cacheFor(hit bool) application.CacheMetadata {

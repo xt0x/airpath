@@ -67,10 +67,57 @@ func TestFixtureClientReturnsTypedNotFoundAndEnforcesBoundedPages(t *testing.T) 
 	}
 }
 
+func TestMaxPagesClientDefaultsListCallsToOnePageAndRejectsUnboundedRequests(t *testing.T) {
+	upstream := &capturingListClient{}
+	client := NewMaxPagesClient(upstream)
+
+	_, err := client.SearchFlights(context.Background(), SearchFlightsRequest{Ident: "ANA110"})
+	if err != nil {
+		t.Fatalf("SearchFlights(default max_pages) error = %v", err)
+	}
+	if upstream.searchMaxPages != DefaultMaxPages {
+		t.Fatalf("search max_pages = %d, want %d", upstream.searchMaxPages, DefaultMaxPages)
+	}
+
+	_, err = client.GetSchedules(context.Background(), SchedulesRequest{StartDate: "2026-06-20", EndDate: "2026-06-20"})
+	if err != nil {
+		t.Fatalf("GetSchedules(default max_pages) error = %v", err)
+	}
+	if upstream.scheduleMaxPages != DefaultMaxPages {
+		t.Fatalf("schedule max_pages = %d, want %d", upstream.scheduleMaxPages, DefaultMaxPages)
+	}
+
+	_, err = client.SearchFlights(context.Background(), SearchFlightsRequest{Ident: "ANA110", MaxPages: 99})
+	if !errors.Is(err, ErrMaxPagesExceeded) {
+		t.Fatalf("SearchFlights(max_pages=99) error = %v, want ErrMaxPagesExceeded", err)
+	}
+	if upstream.searchCalls != 1 {
+		t.Fatalf("upstream search calls = %d, want only the bounded default call", upstream.searchCalls)
+	}
+}
+
 func ptr(value string) *string {
 	return &value
 }
 
 func ptrFloat64(value float64) *float64 {
 	return &value
+}
+
+type capturingListClient struct {
+	Client
+	searchCalls      int
+	searchMaxPages   int
+	scheduleMaxPages int
+}
+
+func (c *capturingListClient) SearchFlights(_ context.Context, request SearchFlightsRequest) (SearchFlightsResponse, error) {
+	c.searchCalls++
+	c.searchMaxPages = request.MaxPages
+	return SearchFlightsResponse{}, nil
+}
+
+func (c *capturingListClient) GetSchedules(_ context.Context, request SchedulesRequest) (SchedulesResponse, error) {
+	c.scheduleMaxPages = request.MaxPages
+	return SchedulesResponse{}, nil
 }
