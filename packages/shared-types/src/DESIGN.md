@@ -55,3 +55,11 @@ The result keeps the duration kind and, when the duration came from timestamps, 
 Event dedupe helpers generate stable hash keys for polling-derived events. The key uses a `polling` discriminator, `eventType`, `coalesce(faFlightId, provisionalFlightLegId)`, and `eventTimestamp`.
 
 When `faFlightId` is unavailable for a provisional scheduled flight, the helper uses `provisionalFlightLegId`, matching the specification. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
+
+## F4 API Contract Definition
+
+The package exports an OpenAPI 3.1 MVP contract for the backend HTTP API. The contract defines only the free-allowance surfaces needed before UI and Go API implementation: flight search, flight detail, map-data, positions, bounded refresh requests, and usage status.
+
+Every success response carries `CacheMetadata` so callers can distinguish fresh cache, stale cache, cache misses, derived data, local accounting, and FlightAware-backed data. Typed error responses cover budget stop, rate limiting, stale-cache misses, upstream failures, and explicit FlightAware fetch disablement.
+
+`FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
