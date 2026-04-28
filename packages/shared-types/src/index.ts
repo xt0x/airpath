@@ -155,3 +155,11 @@ export { calculateFlightDuration } from "./flight-duration.js";
 export type { FlightDuration, FlightDurationInput, FlightDurationKind } from "./flight-duration.js";
 export { generateFlightEventDedupeKey } from "./event-dedupe.js";
 export type { FlightEventDedupeKeyInput } from "./event-dedupe.js";
+export {
+  apiContract,
+  apiErrorCodes,
+  fetchTaskSchema,
+  fetchTaskTypes,
+  mvpExcludedContracts,
+} from "./api-contract.js";
+export type { ApiErrorCode, FetchTaskType, MvpExcludedContract } from "./api-contract.js";
