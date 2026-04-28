@@ -11,13 +11,9 @@ describe("flight track response fixtures", () => {
     expect(currentTrack?.source.endpoint).toBe("GET /flights/{id}/track");
     expect(currentTrack?.trackResponse.status).toBe(200);
     expect(currentTrack?.trackResponse.body.positions.length).toBeGreaterThan(2);
-    expect(currentTrack?.trackResponse.body.positions.map((position) => position.timestamp)).toEqual(
-      [
-        "2026-06-20T08:30:00Z",
-        "2026-06-20T09:00:00Z",
-        "2026-06-20T09:30:00Z",
-      ],
-    );
+    expect(
+      currentTrack?.trackResponse.body.positions.map((position) => position.timestamp),
+    ).toEqual(["2026-06-20T08:30:00Z", "2026-06-20T09:00:00Z", "2026-06-20T09:30:00Z"]);
   });
 
   it("keeps coordinate-bearing track points displayable", () => {
