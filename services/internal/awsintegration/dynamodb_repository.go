@@ -76,12 +76,77 @@ func (r *DynamoDBRepository) GetFlight(ctx context.Context, flightID domain.Flig
 	return flight, cacheFor(true), nil
 }
 
+func (r *DynamoDBRepository) ListPollableFlights(ctx context.Context, now string, limit int) ([]domain.Flight, error) {
+	items, err := r.client.QueryByPrefix(ctx, r.tables.Flights, "flightId", "")
+	if err != nil {
+		return nil, err
+	}
+	flights := make([]domain.Flight, 0, len(items))
+	for _, item := range items {
+		var flight domain.Flight
+		if err := json.Unmarshal([]byte(stringValue(item["body"])), &flight); err != nil {
+			return nil, err
+		}
+		if !hasDuePoll(flight, now) {
+			continue
+		}
+		flights = append(flights, flight)
+		if limit > 0 && len(flights) >= limit {
+			break
+		}
+	}
+	return flights, nil
+}
+
+func (r *DynamoDBRepository) UpdatePollSchedule(ctx context.Context, flight domain.Flight) error {
+	return r.PutFlight(ctx, flight)
+}
+
+func (r *DynamoDBRepository) AcquireFetchLease(ctx context.Context, flightID domain.FlightID, owner string, leaseUntil string, now string) (domain.Flight, bool, error) {
+	flight, _, err := r.GetFlight(ctx, flightID)
+	if err != nil {
+		return domain.Flight{}, false, err
+	}
+	if flight.FetchLeaseUntil != nil && *flight.FetchLeaseUntil > now && (flight.FetchOwner == nil || *flight.FetchOwner != owner) {
+		return flight, false, nil
+	}
+	flight.FetchOwner = &owner
+	flight.FetchLeaseUntil = &leaseUntil
+	flight.UpdatedAt = now
+	if err := r.PutFlight(ctx, flight); err != nil {
+		return domain.Flight{}, false, err
+	}
+	return flight, true, nil
+}
+
+func (r *DynamoDBRepository) UpdateFetchedFlight(ctx context.Context, flight domain.Flight) error {
+	return r.PutFlight(ctx, flight)
+}
+
+func (r *DynamoDBRepository) ReleaseFetchLease(ctx context.Context, flightID domain.FlightID, owner string, now string) error {
+	flight, _, err := r.GetFlight(ctx, flightID)
+	if err != nil {
+		return err
+	}
+	if flight.FetchOwner == nil || *flight.FetchOwner != owner {
+		return nil
+	}
+	flight.FetchOwner = nil
+	flight.FetchLeaseUntil = nil
+	flight.UpdatedAt = now
+	return r.PutFlight(ctx, flight)
+}
+
 func (r *DynamoDBRepository) PutPosition(ctx context.Context, position domain.FlightPosition) error {
 	return r.client.PutItem(ctx, r.tables.FlightPositions, map[string]any{
 		"flightId":  position.FlightID,
 		"timestamp": position.Timestamp,
 		"body":      mustJSON(position),
 	})
+}
+
+func (r *DynamoDBRepository) AppendPosition(ctx context.Context, position domain.FlightPosition) error {
+	return r.PutPosition(ctx, position)
 }
 
 func (r *DynamoDBRepository) PutFlightAwarePosition(ctx context.Context, flightID domain.FlightID, response flightaware.PositionResponse) error {
@@ -233,6 +298,16 @@ func cacheFor(hit bool) application.CacheMetadata {
 		return application.CacheMetadata{Freshness: application.CacheFreshnessMiss, Source: application.CacheSourceCache}
 	}
 	return application.CacheMetadata{Freshness: application.CacheFreshnessFresh, Source: application.CacheSourceCache}
+}
+
+func hasDuePoll(flight domain.Flight, now string) bool {
+	return pollTimeDue(flight.NextPositionPollAt, now) ||
+		pollTimeDue(flight.NextRoutePollAt, now) ||
+		pollTimeDue(flight.NextTrackPollAt, now)
+}
+
+func pollTimeDue(value *domain.ISODateTimeString, now string) bool {
+	return value != nil && *value <= now
 }
 
 func mustJSON(value any) string {

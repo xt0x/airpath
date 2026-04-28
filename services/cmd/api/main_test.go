@@ -40,6 +40,48 @@ func TestHandleAPIRequestReturnsHealthResponseWithoutSecrets(t *testing.T) {
 	}
 }
 
+func TestHandleAPIRequestReportsManualFetchControlConfig(t *testing.T) {
+	t.Setenv("AIRPATH_ENVIRONMENT", "dev")
+	t.Setenv("FLIGHTAWARE_FETCH_ENABLED", "false")
+	t.Setenv("FLIGHTAWARE_FETCH_DISABLED_REASON", "operator_budget_stop")
+
+	response, err := handleAPIRequest(events.APIGatewayV2HTTPRequest{
+		RawPath: "/v1/admin/fetch-control",
+	})
+	if err != nil {
+		t.Fatalf("handleAPIRequest(fetch-control) error = %v", err)
+	}
+	if response.StatusCode != 200 {
+		t.Fatalf("StatusCode = %d, want 200", response.StatusCode)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(response.Body), &body); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if body["fetchingEnabled"] != false {
+		t.Fatalf("fetchingEnabled = %v, want false", body["fetchingEnabled"])
+	}
+	if body["reason"] != "operator_budget_stop" {
+		t.Fatalf("reason = %v", body["reason"])
+	}
+
+	t.Setenv("FLIGHTAWARE_FETCH_ENABLED", "true")
+	t.Setenv("FLIGHTAWARE_FETCH_DISABLED_REASON", "")
+	response, err = handleAPIRequest(events.APIGatewayV2HTTPRequest{
+		RawPath: "/v1/admin/fetch-control",
+	})
+	if err != nil {
+		t.Fatalf("handleAPIRequest(fetch-control resumed) error = %v", err)
+	}
+	if err := json.Unmarshal([]byte(response.Body), &body); err != nil {
+		t.Fatalf("unmarshal resumed body: %v", err)
+	}
+	if body["fetchingEnabled"] != true || body["reason"] != "" {
+		t.Fatalf("resumed body = %#v, want enabled without reason", body)
+	}
+}
+
 func TestBoolEnvDefaultsToFalseUnlessExplicitlyTrue(t *testing.T) {
 	t.Setenv("BOOL_ENV_EXPLICIT_TRUE", "true")
 	t.Setenv("BOOL_ENV_UPPER_TRUE", "TRUE")

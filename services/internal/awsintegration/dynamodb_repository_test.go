@@ -245,6 +245,56 @@ func TestDynamoDBRepositoryReconcilesAccountUsageWithoutLoweringLocalEstimate(t 
 	}
 }
 
+func TestDynamoDBRepositoryListsDuePollFlightsAndUsesFlightLease(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights: "Flights",
+	})
+	due := testFlight("iflg_due", "ANA110")
+	due.NextPositionPollAt = ptrISO("2026-04-29T00:00:00Z")
+	future := testFlight("iflg_future", "ANA111")
+	future.NextPositionPollAt = ptrISO("2026-04-29T00:30:00Z")
+	if err := repo.PutFlight(ctx, due); err != nil {
+		t.Fatalf("PutFlight(due) error = %v", err)
+	}
+	if err := repo.PutFlight(ctx, future); err != nil {
+		t.Fatalf("PutFlight(future) error = %v", err)
+	}
+
+	flights, err := repo.ListPollableFlights(ctx, "2026-04-29T00:05:00Z", 10)
+	if err != nil {
+		t.Fatalf("ListPollableFlights() error = %v", err)
+	}
+	if len(flights) != 1 || flights[0].FlightID != due.FlightID {
+		t.Fatalf("due flights = %#v, want only due flight", flights)
+	}
+
+	leased, ok, err := repo.AcquireFetchLease(ctx, due.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("AcquireFetchLease(first) error = %v", err)
+	}
+	if !ok || leased.FetchOwner == nil || *leased.FetchOwner != "worker-1" {
+		t.Fatalf("first lease = %#v ok=%v", leased, ok)
+	}
+	_, ok, err = repo.AcquireFetchLease(ctx, due.FlightID, "worker-2", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z")
+	if err != nil {
+		t.Fatalf("AcquireFetchLease(second) error = %v", err)
+	}
+	if ok {
+		t.Fatal("second lease acquired while first lease is active")
+	}
+	if err := repo.ReleaseFetchLease(ctx, due.FlightID, "worker-1", "2026-04-29T00:07:00Z"); err != nil {
+		t.Fatalf("ReleaseFetchLease() error = %v", err)
+	}
+	released, _, err := repo.GetFlight(ctx, due.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight(released) error = %v", err)
+	}
+	if released.FetchOwner != nil || released.FetchLeaseUntil != nil {
+		t.Fatalf("released lease fields = owner %v until %v, want nil", released.FetchOwner, released.FetchLeaseUntil)
+	}
+}
+
 func TestDynamoDBRepositoryStoresFlightAwarePositionResponse(t *testing.T) {
 	ctx := context.Background()
 	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{FlightPositions: "FlightPositions"})
@@ -282,4 +332,8 @@ func testFlight(id domain.FlightID, ident string) domain.Flight {
 		Times:               domain.FlightTimes{},
 		UpdatedAt:           "2026-04-29T00:00:00Z",
 	}
+}
+
+func ptrISO(value domain.ISODateTimeString) *domain.ISODateTimeString {
+	return &value
 }

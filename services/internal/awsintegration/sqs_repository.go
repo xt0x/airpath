@@ -15,6 +15,11 @@ type SQSFetchTaskQueue struct {
 	seen     map[string]struct{}
 }
 
+type SQSDiagnosticQueue struct {
+	client   QueueClient
+	queueURL string
+}
+
 func NewSQSFetchTaskQueue(client QueueClient, queueURL string) *SQSFetchTaskQueue {
 	return &SQSFetchTaskQueue{
 		client:   client,
@@ -40,4 +45,19 @@ func (q *SQSFetchTaskQueue) EnqueueFetchTask(ctx context.Context, task applicati
 		return false, err
 	}
 	return true, nil
+}
+
+func NewSQSDiagnosticQueue(client QueueClient, queueURL string) *SQSDiagnosticQueue {
+	return &SQSDiagnosticQueue{
+		client:   client,
+		queueURL: queueURL,
+	}
+}
+
+func (q *SQSDiagnosticQueue) RecordFetchTaskDiagnostic(ctx context.Context, diagnostic application.FetchTaskDiagnostic) error {
+	body, err := json.Marshal(diagnostic)
+	if err != nil {
+		return err
+	}
+	return q.client.SendMessage(ctx, q.queueURL, string(body))
 }

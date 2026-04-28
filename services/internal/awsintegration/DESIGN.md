@@ -9,6 +9,7 @@ The `awsintegration` package contains adapter code that translates application p
 - Usage reconciliation compares local estimates with FlightAware account usage and keeps the higher month-to-date cost so delayed remote usage cannot reduce the local guard.
 - S3 GeoJSON repository stores and loads route and track map layers under `routes/` and `tracks/` keys, including normalized FlightAware `/route` and `/track` responses.
 - SQS fetch task queue performs local idempotency checks before sending task messages.
+- F15 worker adapters list due polling flights, maintain flight-level fetch leases in the cached flight record, append position history, and send redacted fetch failure diagnostics to the configured diagnostic/DLQ queue.
 - Secrets adapter returns raw secret values to callers while logging only secret references.
 
 Real AWS SDK clients can be wrapped behind these small interfaces in the later deployment integration work.

@@ -52,3 +52,8 @@ output "cloudwatch_alarm_names" {
   description = "CloudWatch alarm names for dev monitoring."
   value       = module.observability.alarm_names
 }
+
+output "cloudwatch_dashboard_name" {
+  description = "CloudWatch dashboard name for dev FlightAware free-allowance monitoring."
+  value       = module.observability.dashboard_name
+}
