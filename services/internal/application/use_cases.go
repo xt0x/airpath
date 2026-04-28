@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"airpath/services/internal/domain"
 	"airpath/services/internal/flightaware"
 )
+
+const FetchTaskDedupeWindow = 5 * time.Minute
 
 func (a *Application) SearchFlights(ctx context.Context, input SearchFlightsInput) (FlightSearchResponse, error) {
 	flights, cache, err := a.flights.SearchByIdent(ctx, input.Ident)
@@ -114,11 +117,18 @@ func (a *Application) RequestFlightRefresh(ctx context.Context, input FlightRefr
 		return FlightRefreshResponse{}, err
 	}
 	if !allowed {
-		return FlightRefreshResponse{}, ErrBudgetExceeded
+		return FlightRefreshResponse{FlightID: input.FlightID, AcceptedTasks: []FetchTask{}, Cache: staleCache(cache, input.RequestedAt)}, nil
 	}
 
 	accepted := make([]FetchTask, 0, len(input.TaskTypes))
 	for _, taskType := range dedupeTaskTypes(input.TaskTypes) {
+		taskAllowed, err := a.fetchTaskAllowed(ctx, taskType, input.ClientReason)
+		if err != nil {
+			return FlightRefreshResponse{}, err
+		}
+		if !taskAllowed {
+			continue
+		}
 		task := FetchTask{
 			SchemaVersion:  1,
 			TaskID:         stableTaskID("refresh", input.FlightID, taskType, input.RequestedAt),
@@ -127,7 +137,7 @@ func (a *Application) RequestFlightRefresh(ctx context.Context, input FlightRefr
 			FAFlightID:     flight.FAFlightID,
 			RequestedAt:    input.RequestedAt,
 			Reason:         input.ClientReason,
-			IdempotencyKey: stableTaskID(input.IdempotencyID, input.FlightID, taskType, input.ClientReason),
+			IdempotencyKey: fetchTaskWindowKey(input.FlightID, taskType, input.RequestedAt),
 		}
 		enqueued, err := a.fetchTasks.EnqueueFetchTask(ctx, task)
 		if err != nil {
@@ -139,6 +149,13 @@ func (a *Application) RequestFlightRefresh(ctx context.Context, input FlightRefr
 	}
 
 	return FlightRefreshResponse{FlightID: input.FlightID, AcceptedTasks: accepted, Cache: cache}, nil
+}
+
+func (a *Application) fetchTaskAllowed(ctx context.Context, taskType FetchTaskType, reason FetchReason) (bool, error) {
+	if a.fetchPolicy == nil {
+		return true, nil
+	}
+	return a.fetchPolicy.FetchTaskAllowed(ctx, taskType, reason)
 }
 
 func (a *Application) GetUsageStatus(ctx context.Context, input UsageStatusInput) (UsageStatus, error) {
@@ -249,6 +266,21 @@ func dedupeTaskTypes(taskTypes []FetchTaskType) []FetchTaskType {
 
 func stableTaskID(prefix string, flightID domain.FlightID, taskType FetchTaskType, suffix any) string {
 	return fmt.Sprintf("%s:%s:%s:%v", prefix, flightID, taskType, suffix)
+}
+
+func fetchTaskWindowKey(flightID domain.FlightID, taskType FetchTaskType, requestedAt string) string {
+	windowStart := requestedAt
+	if parsed, err := time.Parse(time.RFC3339, requestedAt); err == nil {
+		windowStart = parsed.UTC().Truncate(FetchTaskDedupeWindow).Format("2006-01-02T15:04:05Z")
+	}
+	return stableTaskID("refresh", flightID, taskType, windowStart)
+}
+
+func staleCache(cache CacheMetadata, checkedAt string) CacheMetadata {
+	cache.Freshness = CacheFreshnessStale
+	cache.Stale = true
+	cache.CheckedAt = checkedAt
+	return cache
 }
 
 func apiError(code ApiErrorCode, message string, retryable bool, requestID string) APIError {

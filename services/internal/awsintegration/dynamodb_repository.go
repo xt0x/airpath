@@ -187,6 +187,34 @@ func (r *DynamoDBRepository) RecordFlightAwareCall(ctx context.Context, record f
 	return r.PutMonthlyUsageStatus(ctx, scope, status)
 }
 
+func (r *DynamoDBRepository) ReconcileAccountUsage(ctx context.Context, scope application.UsageBudgetScope, response flightaware.UsageResponse) error {
+	if scope.Key() == "" {
+		return application.ErrValidation
+	}
+	status, err := r.GetMonthlyUsageStatus(ctx, scope)
+	if err != nil {
+		if !errors.Is(err, application.ErrNotFound) {
+			return err
+		}
+		status = application.UsageStatus{
+			Budget: application.UsageBudgetStatus{
+				Environment:       scope.Environment,
+				Month:             scope.Month,
+				Currency:          response.Currency,
+				SoftStopThreshold: application.DefaultSoftStopThresholdUSD,
+			},
+			FetchingEnabled: true,
+		}
+	}
+	if response.Currency != "" {
+		status.Budget.Currency = response.Currency
+	}
+	if response.MonthToDate.EstimatedCostUSD > status.Budget.EstimatedMonthToDateCost {
+		status.Budget.EstimatedMonthToDateCost = response.MonthToDate.EstimatedCostUSD
+	}
+	return r.PutMonthlyUsageStatus(ctx, scope, status)
+}
+
 func cacheFor(hit bool) application.CacheMetadata {
 	if !hit {
 		return application.CacheMetadata{Freshness: application.CacheFreshnessMiss, Source: application.CacheSourceCache}
