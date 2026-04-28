@@ -21,6 +21,7 @@ coverage.out
 *.coverprofile
 
 # Terraform
+artifacts/
 **/.terraform/
 *.tfplan
 *.tfstate

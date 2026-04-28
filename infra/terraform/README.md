@@ -45,3 +45,9 @@ make terraform-check
 ```
 
 `terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`.
+
+## Dev Personal Demo
+
+The `envs/dev` root deploys the personal demo environment. It is personal, non-commercial, and low-frequency by policy. Lambda artifacts are built outside Terraform with `make lambda-artifacts`, then referenced by the dev artifact path variables.
+
+Real FlightAware calls are disabled by default. Keep `allow_real_flightaware_calls = false` for normal dev deployments. Set it to `true` only for a limited opt-in smoke test after a backend-only FlightAware API key has been stored in Secrets Manager. Terraform still stores only the secret reference, never the raw API key.

@@ -14,6 +14,10 @@ locals {
   fetch_task_queue_arn  = "arn:${data.aws_partition.current.partition}:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${local.fetch_task_queue_name}"
   fetch_task_queue_url  = "https://sqs.${var.aws_region}.amazonaws.com/${data.aws_caller_identity.current.account_id}/${local.fetch_task_queue_name}"
   geojson_bucket_name   = "${local.name_prefix}-geojson-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+
+  flightaware_real_calls_enabled    = var.allow_real_flightaware_calls ? "true" : "false"
+  flightaware_fetch_enabled         = var.allow_real_flightaware_calls ? "true" : "false"
+  flightaware_fetch_disabled_reason = var.allow_real_flightaware_calls ? "" : var.flightaware_fetch_disabled_reason
 }
 
 data "aws_iam_policy_document" "dispatcher_noop_enqueue" {
@@ -121,14 +125,17 @@ module "api_lambda" {
   policy_json     = data.aws_iam_policy_document.api_data_access.json
 
   environment_variables = {
-    AIRPATH_ENVIRONMENT            = var.environment
-    FLIGHTAWARE_API_KEY_SECRET_ARN = module.secret_references.flightaware_api_key_secret_arn
-    FLIGHTAWARE_FETCH_ENABLED      = "false"
-    FLIGHTS_TABLE_NAME             = module.data_tables.table_names.flights
-    FLIGHT_LOOKUP_TABLE_NAME       = module.data_tables.table_names.flight_lookup
-    FLIGHT_POSITIONS_TABLE_NAME    = module.data_tables.table_names.flight_positions
-    GEOJSON_BUCKET_NAME            = module.geojson_storage.bucket_name
-    USAGE_BUDGET_TABLE_NAME        = module.data_tables.table_names.usage_budget
+    AIRPATH_PERSONAL_DEMO_NOTICE      = var.personal_demo_notice
+    AIRPATH_ENVIRONMENT               = var.environment
+    FLIGHTAWARE_API_KEY_SECRET_ARN    = module.secret_references.flightaware_api_key_secret_arn
+    FLIGHTAWARE_FETCH_DISABLED_REASON = local.flightaware_fetch_disabled_reason
+    FLIGHTAWARE_FETCH_ENABLED         = local.flightaware_fetch_enabled
+    FLIGHTAWARE_REAL_CALLS_ENABLED    = local.flightaware_real_calls_enabled
+    FLIGHTS_TABLE_NAME                = module.data_tables.table_names.flights
+    FLIGHT_LOOKUP_TABLE_NAME          = module.data_tables.table_names.flight_lookup
+    FLIGHT_POSITIONS_TABLE_NAME       = module.data_tables.table_names.flight_positions
+    GEOJSON_BUCKET_NAME               = module.geojson_storage.bucket_name
+    USAGE_BUDGET_TABLE_NAME           = module.data_tables.table_names.usage_budget
   }
 
   tags = local.common_tags
@@ -145,14 +152,18 @@ module "fetcher_lambda" {
   policy_json     = data.aws_iam_policy_document.fetcher_data_access.json
 
   environment_variables = {
-    AIRPATH_ENVIRONMENT            = var.environment
-    FETCHER_MODE                   = "mock"
-    FLIGHTAWARE_API_KEY_SECRET_ARN = module.secret_references.flightaware_api_key_secret_arn
-    FLIGHTS_TABLE_NAME             = module.data_tables.table_names.flights
-    FLIGHT_LOOKUP_TABLE_NAME       = module.data_tables.table_names.flight_lookup
-    FLIGHT_POSITIONS_TABLE_NAME    = module.data_tables.table_names.flight_positions
-    GEOJSON_BUCKET_NAME            = module.geojson_storage.bucket_name
-    USAGE_BUDGET_TABLE_NAME        = module.data_tables.table_names.usage_budget
+    AIRPATH_PERSONAL_DEMO_NOTICE      = var.personal_demo_notice
+    AIRPATH_ENVIRONMENT               = var.environment
+    FETCHER_MODE                      = var.allow_real_flightaware_calls ? "real-opt-in" : "mock"
+    FLIGHTAWARE_API_KEY_SECRET_ARN    = module.secret_references.flightaware_api_key_secret_arn
+    FLIGHTAWARE_FETCH_DISABLED_REASON = local.flightaware_fetch_disabled_reason
+    FLIGHTAWARE_FETCH_ENABLED         = local.flightaware_fetch_enabled
+    FLIGHTAWARE_REAL_CALLS_ENABLED    = local.flightaware_real_calls_enabled
+    FLIGHTS_TABLE_NAME                = module.data_tables.table_names.flights
+    FLIGHT_LOOKUP_TABLE_NAME          = module.data_tables.table_names.flight_lookup
+    FLIGHT_POSITIONS_TABLE_NAME       = module.data_tables.table_names.flight_positions
+    GEOJSON_BUCKET_NAME               = module.geojson_storage.bucket_name
+    USAGE_BUDGET_TABLE_NAME           = module.data_tables.table_names.usage_budget
   }
 
   tags = local.common_tags

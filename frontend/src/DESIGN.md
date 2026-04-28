@@ -14,3 +14,7 @@ Keep Next.js configuration, package metadata, and environment examples at the `f
 `src/features/flights` owns the FlightAware free-allowance MVP browser workflow. It contains a typed API client for the HTTP contract, server-renderable component tests for search/results, summary, map layers, refresh guard state, stale cache notices, and usage budget display, plus the client dashboard state container used by the app route.
 
 The map surface consumes normalized route, track, and current-position layers from the API. The map adapter builds deck.gl `GeoJsonLayer` and `ScatterplotLayer` instances for the Mapbox light style, while the component also renders a lightweight SVG fallback so server-rendered and tokenless local views remain inspectable.
+
+## F17 Personal Demo Notice
+
+The dashboard topbar includes a short personal non-commercial low-frequency notice so the deployed dev demo does not present itself as a commercial or high-frequency tracking surface. The notice is static UI copy; runtime fetch control and real-call opt-in state still come from the backend usage and fetch-control APIs.
