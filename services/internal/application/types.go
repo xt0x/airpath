@@ -24,13 +24,13 @@ const (
 )
 
 type CacheMetadata struct {
-	Freshness CacheFreshness
-	Source    CacheSource
-	Stale     bool
-	CheckedAt string
-	FetchedAt *string
-	StaleAt   *string
-	ExpiresAt *string
+	Freshness CacheFreshness `json:"freshness"`
+	Source    CacheSource    `json:"source"`
+	Stale     bool           `json:"stale"`
+	CheckedAt string         `json:"checkedAt"`
+	FetchedAt *string        `json:"fetchedAt,omitempty"`
+	StaleAt   *string        `json:"staleAt,omitempty"`
+	ExpiresAt *string        `json:"expiresAt,omitempty"`
 }
 
 type FetchTaskType string
@@ -55,16 +55,16 @@ const (
 )
 
 type FetchTask struct {
-	SchemaVersion  int
-	TaskID         string
-	TaskType       FetchTaskType
-	FlightID       domain.FlightID
-	FAFlightID     *domain.FAFlightID
-	RequestedAt    string
-	Reason         FetchReason
-	IdempotencyKey string
-	NotBefore      *string
-	Attempt        int
+	SchemaVersion  int                `json:"schemaVersion"`
+	TaskID         string             `json:"taskId"`
+	TaskType       FetchTaskType      `json:"taskType"`
+	FlightID       domain.FlightID    `json:"flightId"`
+	FAFlightID     *domain.FAFlightID `json:"faFlightId"`
+	RequestedAt    string             `json:"requestedAt"`
+	Reason         FetchReason        `json:"reason"`
+	IdempotencyKey string             `json:"idempotencyKey"`
+	NotBefore      *string            `json:"notBefore,omitempty"`
+	Attempt        int                `json:"attempt"`
 }
 
 type MapSource string
@@ -78,82 +78,82 @@ const (
 )
 
 type MapLayer struct {
-	Source            MapSource
-	Available         bool
-	GeoJSON           map[string]any
-	UnavailableReason *string
+	Source            MapSource      `json:"source"`
+	Available         bool           `json:"available"`
+	GeoJSON           map[string]any `json:"geojson"`
+	UnavailableReason *string        `json:"unavailableReason,omitempty"`
 }
 
 type Position struct {
-	Latitude             float64
-	Longitude            float64
-	AltitudeHundredsFeet *int
-	AltitudeFeet         *int
-	GroundspeedKnots     *int
-	HeadingDegrees       *int
-	Timestamp            string
-	Source               domain.PositionSource
+	Latitude             float64               `json:"latitude"`
+	Longitude            float64               `json:"longitude"`
+	AltitudeHundredsFeet *int                  `json:"altitudeHundredsFeet"`
+	AltitudeFeet         *int                  `json:"altitudeFeet"`
+	GroundspeedKnots     *int                  `json:"groundspeedKnots"`
+	HeadingDegrees       *int                  `json:"headingDegrees"`
+	Timestamp            string                `json:"timestamp"`
+	Source               domain.PositionSource `json:"source"`
 }
 
 type FlightSummaryItem struct {
-	FlightID               domain.FlightID
-	FlightIDType           domain.FlightIDType
-	ProvisionalFlightLegID *domain.ProvisionalFlightLegID
-	FAFlightID             *domain.FAFlightID
-	Ident                  string
-	IdentIATA              *string
-	Origin                 domain.AirportCode
-	Destination            domain.AirportCode
-	ScheduledOut           *domain.ISODateTimeString
-	LegIndex               *int
-	Status                 string
+	FlightID               domain.FlightID                `json:"flightId"`
+	FlightIDType           domain.FlightIDType            `json:"flightIdType"`
+	ProvisionalFlightLegID *domain.ProvisionalFlightLegID `json:"provisionalFlightLegId"`
+	FAFlightID             *domain.FAFlightID             `json:"faFlightId"`
+	Ident                  string                         `json:"ident"`
+	IdentIATA              *string                        `json:"identIata"`
+	Origin                 domain.AirportCode             `json:"origin"`
+	Destination            domain.AirportCode             `json:"destination"`
+	ScheduledOut           *domain.ISODateTimeString      `json:"scheduledOut"`
+	LegIndex               *int                           `json:"legIndex"`
+	Status                 string                         `json:"status"`
 }
 
 type FlightSearchResponse struct {
-	Items []FlightSummaryItem
-	Cache CacheMetadata
+	Items []FlightSummaryItem `json:"items"`
+	Cache CacheMetadata       `json:"cache"`
 }
 
 type FlightDetailResponse struct {
-	Flight  domain.Flight
-	Route   MapLayer
-	Track   MapLayer
-	Current *Position
-	Cache   CacheMetadata
+	Flight  domain.Flight `json:"flight"`
+	Route   MapLayer      `json:"route"`
+	Track   MapLayer      `json:"track"`
+	Current *Position     `json:"current"`
+	Cache   CacheMetadata `json:"cache"`
 }
 
 type FlightMapDataResponse struct {
-	FlightID   domain.FlightID
-	FAFlightID *domain.FAFlightID
-	Planned    MapLayer
-	Actual     MapLayer
-	Current    MapLayer
-	Cache      CacheMetadata
+	FlightID   domain.FlightID    `json:"flightId"`
+	FAFlightID *domain.FAFlightID `json:"faFlightId"`
+	Planned    MapLayer           `json:"planned"`
+	Actual     MapLayer           `json:"actual"`
+	Current    MapLayer           `json:"current"`
+	Cache      CacheMetadata      `json:"cache"`
 }
 
 type FlightRefreshResponse struct {
-	FlightID      domain.FlightID
-	AcceptedTasks []FetchTask
-	Cache         CacheMetadata
+	FlightID      domain.FlightID `json:"flightId"`
+	AcceptedTasks []FetchTask     `json:"acceptedTasks"`
+	Cache         CacheMetadata   `json:"cache"`
 }
 
 type UsageBudgetStatus struct {
-	Currency                 string
-	EstimatedMonthToDateCost float64
-	SoftStopThreshold        float64
-	Stopped                  bool
+	Currency                 string  `json:"currency"`
+	EstimatedMonthToDateCost float64 `json:"estimatedMonthToDateCost"`
+	SoftStopThreshold        float64 `json:"softStopThreshold"`
+	Stopped                  bool    `json:"stopped"`
 }
 
 type RateLimitStatus struct {
-	Limited bool
-	ResetAt *string
+	Limited bool    `json:"limited"`
+	ResetAt *string `json:"resetAt"`
 }
 
 type UsageStatus struct {
-	Budget          UsageBudgetStatus
-	RateLimit       RateLimitStatus
-	FetchingEnabled bool
-	Cache           CacheMetadata
+	Budget          UsageBudgetStatus `json:"budget"`
+	RateLimit       RateLimitStatus   `json:"rateLimit"`
+	FetchingEnabled bool              `json:"fetchingEnabled"`
+	Cache           CacheMetadata     `json:"cache"`
 }
 
 type SearchFlightsInput struct {
@@ -194,12 +194,12 @@ const (
 )
 
 type APIError struct {
-	Code                ApiErrorCode
-	Message             string
-	Retryable           bool
-	RequestID           string
-	RetryAfterSeconds   *int
-	StaleCacheAvailable bool
+	Code                ApiErrorCode `json:"code"`
+	Message             string       `json:"message"`
+	Retryable           bool         `json:"retryable"`
+	RequestID           string       `json:"requestId"`
+	RetryAfterSeconds   *int         `json:"retryAfterSeconds,omitempty"`
+	StaleCacheAvailable bool         `json:"staleCacheAvailable"`
 }
 
 var (
