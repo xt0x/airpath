@@ -27,3 +27,23 @@ output "fetch_task_queue_url" {
   description = "Fetch task queue URL."
   value       = module.fetch_task_queue.fetch_task_queue_url
 }
+
+output "fetch_task_dlq_url" {
+  description = "Fetch task dead-letter queue URL."
+  value       = module.fetch_task_queue.fetch_task_dlq_url
+}
+
+output "dynamodb_table_names" {
+  description = "DynamoDB table names used by the dev API and worker shells."
+  value       = module.data_tables.table_names
+}
+
+output "geojson_bucket_name" {
+  description = "S3 bucket name for route and track GeoJSON artifacts."
+  value       = module.geojson_storage.bucket_name
+}
+
+output "flightaware_api_key_secret_arn" {
+  description = "Secrets Manager secret ARN for the FlightAware API key."
+  value       = module.secret_references.flightaware_api_key_secret_arn
+}

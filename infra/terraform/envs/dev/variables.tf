@@ -38,3 +38,21 @@ variable "dispatcher_schedule_expression" {
   type        = string
   default     = "rate(15 minutes)"
 }
+
+variable "geojson_artifact_retention_days" {
+  description = "Number of days to retain dev route and track GeoJSON artifacts."
+  type        = number
+  default     = 30
+}
+
+variable "fetch_task_max_receive_count" {
+  description = "Number of receive attempts before a fetch task moves to the DLQ."
+  type        = number
+  default     = 3
+}
+
+variable "flightaware_api_key_secret_name" {
+  description = "Secrets Manager secret name for the FlightAware API key value managed outside Terraform."
+  type        = string
+  default     = "airpath/dev/flightaware-api-key"
+}

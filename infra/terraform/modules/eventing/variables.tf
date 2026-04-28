@@ -28,6 +28,12 @@ variable "dispatcher_schedule_expression" {
   type        = string
 }
 
+variable "fetch_task_max_receive_count" {
+  description = "Number of receive attempts before a fetch task is moved to the DLQ."
+  type        = number
+  default     = 3
+}
+
 variable "tags" {
   description = "Tags applied to eventing resources."
   type        = map(string)
