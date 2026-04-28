@@ -12,6 +12,7 @@ import type {
 import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./index.js";
 import {
   calculateFlightDuration,
+  generateFlightEventDedupeKey,
   normalizeAltitudeFeet,
   normalizeFlightPositionMetrics,
   normalizeGroundspeedKnots,
@@ -441,5 +442,46 @@ describe("flight duration calculation", () => {
         filedEteSeconds: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("flight event dedupe key generation", () => {
+  it("generates a stable alert dedupe key from alert event fields", () => {
+    const input = {
+      source: "alert" as const,
+      alertId: "alert-123",
+      eventType: "departure" as const,
+      faFlightId: "UAL1234-1234567890-airline-0123",
+      provisionalFlightLegId: null,
+      eventTimestamp: "2026-04-25T10:08:00Z",
+    };
+
+    expect(generateFlightEventDedupeKey(input)).toBe("79c851e2d0d0");
+    expect(generateFlightEventDedupeKey(input)).toBe(generateFlightEventDedupeKey(input));
+  });
+
+  it("uses provisionalFlightLegId when faFlightId is not available", () => {
+    expect(
+      generateFlightEventDedupeKey({
+        source: "alert",
+        alertId: "alert-999",
+        eventType: "departure",
+        faFlightId: null,
+        provisionalFlightLegId: "sched_3f5a7c8d91ab",
+        eventTimestamp: "2026-04-25T10:08:00Z",
+      }),
+    ).toBe("cf3f553a88e8");
+  });
+
+  it("generates a stable polling event dedupe key without an alert id", () => {
+    expect(
+      generateFlightEventDedupeKey({
+        source: "polling",
+        eventType: "arrival",
+        faFlightId: "iflg_8d2a2a3a6c4f",
+        provisionalFlightLegId: null,
+        eventTimestamp: "2026-04-25T21:50:00Z",
+      }),
+    ).toBe("71a8a0fd8100");
   });
 });

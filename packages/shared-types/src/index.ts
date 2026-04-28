@@ -183,3 +183,5 @@ export {
 export type { FlightPositionMetrics, FlightPositionMetricsInput } from "./position-metrics.js";
 export { calculateFlightDuration } from "./flight-duration.js";
 export type { FlightDuration, FlightDurationInput, FlightDurationKind } from "./flight-duration.js";
+export { generateFlightEventDedupeKey } from "./event-dedupe.js";
+export type { FlightEventDedupeKeyInput } from "./event-dedupe.js";

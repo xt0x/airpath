@@ -461,6 +461,52 @@ func TestCalculateFlightDurationReturnsNilWithoutCompleteSource(t *testing.T) {
 	}
 }
 
+func TestGenerateFlightEventDedupeKeyForAlert(t *testing.T) {
+	input := FlightEventDedupeKeyInput{
+		Source:                 FlightEventSourceAlert,
+		AlertID:                ptr("alert-123"),
+		EventType:              FlightEventTypeDeparture,
+		FAFlightID:             ptr(FAFlightID("UAL1234-1234567890-airline-0123")),
+		ProvisionalFlightLegID: nil,
+		EventTimestamp:         "2026-04-25T10:08:00Z",
+	}
+
+	got := GenerateFlightEventDedupeKey(input)
+	if got != "79c851e2d0d0" {
+		t.Fatalf("GenerateFlightEventDedupeKey(alert) = %q, want %q", got, "79c851e2d0d0")
+	}
+	if got != GenerateFlightEventDedupeKey(input) {
+		t.Fatal("GenerateFlightEventDedupeKey(alert) is not stable")
+	}
+}
+
+func TestGenerateFlightEventDedupeKeyUsesProvisionalFlightLegID(t *testing.T) {
+	got := GenerateFlightEventDedupeKey(FlightEventDedupeKeyInput{
+		Source:                 FlightEventSourceAlert,
+		AlertID:                ptr("alert-999"),
+		EventType:              FlightEventTypeDeparture,
+		FAFlightID:             nil,
+		ProvisionalFlightLegID: ptr(ProvisionalFlightLegID("sched_3f5a7c8d91ab")),
+		EventTimestamp:         "2026-04-25T10:08:00Z",
+	})
+	if got != "cf3f553a88e8" {
+		t.Fatalf("GenerateFlightEventDedupeKey(provisional) = %q, want %q", got, "cf3f553a88e8")
+	}
+}
+
+func TestGenerateFlightEventDedupeKeyForPolling(t *testing.T) {
+	got := GenerateFlightEventDedupeKey(FlightEventDedupeKeyInput{
+		Source:                 FlightEventSourcePolling,
+		EventType:              FlightEventTypeArrival,
+		FAFlightID:             ptr(FAFlightID("iflg_8d2a2a3a6c4f")),
+		ProvisionalFlightLegID: nil,
+		EventTimestamp:         "2026-04-25T21:50:00Z",
+	})
+	if got != "71a8a0fd8100" {
+		t.Fatalf("GenerateFlightEventDedupeKey(polling) = %q, want %q", got, "71a8a0fd8100")
+	}
+}
+
 func baseFlightDurationTimes() FlightTimes {
 	return FlightTimes{
 		ScheduledOut: ptr(ISODateTimeString("2026-04-25T09:30:00Z")),

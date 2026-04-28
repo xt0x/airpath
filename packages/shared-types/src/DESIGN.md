@@ -6,7 +6,7 @@ This source directory owns TypeScript domain contracts that are shared by the we
 
 The initial domain model exports basic, dependency-free TypeScript types for flights, airports, positions, events, persistent user watches, and WebSocket session subscriptions. These types intentionally keep nullable FlightAware-derived fields as `null` instead of defaulting to empty strings or zero values.
 
-Event dedupe key generation is left to a later L2 work item.
+All L2 pure helper categories are represented in this package.
 
 ## L2-02 Flight Leg ID Generation
 
@@ -49,3 +49,9 @@ Groundspeed remains in knots. Heading remains in degrees, with `360` normalized 
 Flight duration helpers calculate the best available duration using the specification priority order: actual runway time, estimated runway time, scheduled runway time, filed ETE, then actual gate-to-gate time.
 
 The result keeps the duration kind and, when the duration came from timestamps, the normalized UTC start and end timestamps. Incomplete timestamp pairs are skipped rather than partially calculated. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
+
+## L2-07 Event Dedupe Key Generation
+
+Event dedupe helpers generate stable hash keys for alert and polling events. Alert events use `alertId`, `eventType`, `coalesce(faFlightId, provisionalFlightLegId)`, and `eventTimestamp`; polling events use a `polling` discriminator in place of `alertId` so they cannot collide with alerts.
+
+When `faFlightId` is unavailable for a provisional scheduled flight, the helper uses `provisionalFlightLegId`, matching the specification. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
