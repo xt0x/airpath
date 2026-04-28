@@ -42,6 +42,37 @@ func TestSQSFetchTaskQueueDedupesBeforeSending(t *testing.T) {
 	}
 }
 
+func TestSQSDiagnosticQueueSendsSafeFetchFailureMetadata(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryQueueClient()
+	queue := NewSQSDiagnosticQueue(client, "https://sqs.example/fetch-task-dlq")
+
+	if err := queue.RecordFetchTaskDiagnostic(ctx, application.FetchTaskDiagnostic{
+		TaskID:    "task-1",
+		TaskType:  application.FetchTaskPosition,
+		FlightID:  "iflg_1",
+		ErrorCode: "rate_limited",
+		Message:   "FlightAware rate limit is active",
+		FailedAt:  "2026-04-29T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("RecordFetchTaskDiagnostic() error = %v", err)
+	}
+
+	messages := client.Messages()
+	if len(messages) != 1 {
+		t.Fatalf("message count = %d, want 1", len(messages))
+	}
+	if messages[0].QueueURL != "https://sqs.example/fetch-task-dlq" {
+		t.Fatalf("queue URL = %q", messages[0].QueueURL)
+	}
+	if strings.Contains(messages[0].Body, "fa_") || strings.Contains(messages[0].Body, "x-apikey") {
+		t.Fatalf("diagnostic body contains unsafe metadata: %s", messages[0].Body)
+	}
+	if !strings.Contains(messages[0].Body, `"errorCode":"rate_limited"`) {
+		t.Fatalf("diagnostic body = %s, want typed error code", messages[0].Body)
+	}
+}
+
 func TestSecretsAdapterLoadsFlightAwareKeyWithoutLoggingSecretValue(t *testing.T) {
 	ctx := context.Background()
 	client := NewMemorySecretsClient(map[string]string{"flightaware/api-key": "super-secret-key"})
