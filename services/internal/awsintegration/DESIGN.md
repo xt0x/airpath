@@ -3,9 +3,11 @@
 The `awsintegration` package contains adapter code that translates application ports to AWS-shaped clients. Tests use in-memory clients with the same adapter contracts so CI can verify serialization, keys, dedupe, and secret handling without provisioning AWS resources.
 
 - DynamoDB repository methods serialize cached flights, lookup rows, latest positions, and monthly usage budget state by environment and month.
+- FlightAware API keys can be resolved from `FLIGHTAWARE_API_KEY` or `FLIGHTAWARE_API_KEY_SECRET_ARN`, with the raw key passed only to the FlightAware transport.
+- DynamoDB can store normalized FlightAware `/position` responses as `FlightPositions`.
 - The usage budget repository normalizes the default USD 4.00 soft stop threshold and can record local FlightAware call estimates before upstream fetches.
 - Usage reconciliation compares local estimates with FlightAware account usage and keeps the higher month-to-date cost so delayed remote usage cannot reduce the local guard.
-- S3 GeoJSON repository stores and loads route and track map layers under `routes/` and `tracks/` keys.
+- S3 GeoJSON repository stores and loads route and track map layers under `routes/` and `tracks/` keys, including normalized FlightAware `/route` and `/track` responses.
 - SQS fetch task queue performs local idempotency checks before sending task messages.
 - Secrets adapter returns raw secret values to callers while logging only secret references.
 

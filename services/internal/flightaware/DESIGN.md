@@ -4,9 +4,10 @@ The `flightaware` package owns the backend boundary around FlightAware AeroAPI a
 
 - `Client` abstracts search, summary, route, position, track, schedules, and account usage.
 - `FixtureClient` is deterministic test infrastructure and never performs external calls.
+- `HTTPClient` is the real AeroAPI v4 transport. It uses the `x-apikey` header, the `https://aeroapi.flightaware.com/aeroapi` base URL by default, and normalizes MVP JSON responses into the package response types.
 - `MaxPagesClient` normalizes list requests to `max_pages = 1` by default and rejects larger values before transport.
 - `UsageAccountingClient` records before/after local usage estimates around each endpoint call.
 - `RateLimitedClient` blocks endpoints when local stop state is active or an upstream 429 is observed, and 429 backoff also pauses low-priority route, track, and schedule calls.
 - Redaction helpers sanitize sensitive headers and log text before structured logging.
 
-This package must not hardcode API keys. Real credentials are loaded by later runtime adapters from environment variables or Secrets Manager and passed only to transport code.
+This package must not hardcode API keys. Real credentials are loaded by runtime adapters from environment variables or Secrets Manager and passed only to transport code. Real AeroAPI tests are opt-in through `AIRPATH_FLIGHTAWARE_REAL_TESTS=true` and are skipped by default.
