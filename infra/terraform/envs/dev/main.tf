@@ -13,6 +13,7 @@ locals {
   fetch_task_queue_name = "${local.name_prefix}-fetch-task"
   fetch_task_queue_arn  = "arn:${data.aws_partition.current.partition}:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${local.fetch_task_queue_name}"
   fetch_task_queue_url  = "https://sqs.${var.aws_region}.amazonaws.com/${data.aws_caller_identity.current.account_id}/${local.fetch_task_queue_name}"
+  geojson_bucket_name   = "${local.name_prefix}-geojson-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
 }
 
 data "aws_iam_policy_document" "dispatcher_noop_enqueue" {
@@ -20,6 +21,93 @@ data "aws_iam_policy_document" "dispatcher_noop_enqueue" {
     actions   = ["sqs:SendMessage"]
     resources = [local.fetch_task_queue_arn]
   }
+}
+
+data "aws_iam_policy_document" "api_data_access" {
+  statement {
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
+    ]
+
+    resources = values(module.data_tables.table_arns)
+  }
+
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+
+    resources = [
+      "${module.geojson_storage.bucket_arn}/routes/*",
+      "${module.geojson_storage.bucket_arn}/tracks/*",
+    ]
+  }
+
+  statement {
+    actions   = ["secretsmanager:DescribeSecret"]
+    resources = [module.secret_references.flightaware_api_key_secret_arn]
+  }
+}
+
+data "aws_iam_policy_document" "fetcher_data_access" {
+  statement {
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
+    ]
+
+    resources = values(module.data_tables.table_arns)
+  }
+
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+
+    resources = [
+      "${module.geojson_storage.bucket_arn}/routes/*",
+      "${module.geojson_storage.bucket_arn}/tracks/*",
+    ]
+  }
+
+  statement {
+    actions = [
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue",
+    ]
+
+    resources = [module.secret_references.flightaware_api_key_secret_arn]
+  }
+}
+
+module "data_tables" {
+  source = "../../modules/data-dynamodb"
+
+  name_prefix                    = local.name_prefix
+  point_in_time_recovery_enabled = false
+  tags                           = local.common_tags
+}
+
+module "geojson_storage" {
+  source = "../../modules/storage-s3"
+
+  bucket_name             = local.geojson_bucket_name
+  artifact_retention_days = var.geojson_artifact_retention_days
+  tags                    = local.common_tags
+}
+
+module "secret_references" {
+  source = "../../modules/secrets"
+
+  flightaware_api_key_secret_name = var.flightaware_api_key_secret_name
+  tags                            = local.common_tags
 }
 
 module "api_lambda" {
@@ -30,10 +118,17 @@ module "api_lambda" {
   artifact_path   = var.api_lambda_artifact_path
   memory_size     = 128
   timeout_seconds = 10
+  policy_json     = data.aws_iam_policy_document.api_data_access.json
 
   environment_variables = {
-    AIRPATH_ENVIRONMENT       = var.environment
-    FLIGHTAWARE_FETCH_ENABLED = "false"
+    AIRPATH_ENVIRONMENT            = var.environment
+    FLIGHTAWARE_API_KEY_SECRET_ARN = module.secret_references.flightaware_api_key_secret_arn
+    FLIGHTAWARE_FETCH_ENABLED      = "false"
+    FLIGHTS_TABLE_NAME             = module.data_tables.table_names.flights
+    FLIGHT_LOOKUP_TABLE_NAME       = module.data_tables.table_names.flight_lookup
+    FLIGHT_POSITIONS_TABLE_NAME    = module.data_tables.table_names.flight_positions
+    GEOJSON_BUCKET_NAME            = module.geojson_storage.bucket_name
+    USAGE_BUDGET_TABLE_NAME        = module.data_tables.table_names.usage_budget
   }
 
   tags = local.common_tags
@@ -47,10 +142,17 @@ module "fetcher_lambda" {
   artifact_path   = var.fetcher_lambda_artifact_path
   memory_size     = 128
   timeout_seconds = 30
+  policy_json     = data.aws_iam_policy_document.fetcher_data_access.json
 
   environment_variables = {
-    AIRPATH_ENVIRONMENT = var.environment
-    FETCHER_MODE        = "mock"
+    AIRPATH_ENVIRONMENT            = var.environment
+    FETCHER_MODE                   = "mock"
+    FLIGHTAWARE_API_KEY_SECRET_ARN = module.secret_references.flightaware_api_key_secret_arn
+    FLIGHTS_TABLE_NAME             = module.data_tables.table_names.flights
+    FLIGHT_LOOKUP_TABLE_NAME       = module.data_tables.table_names.flight_lookup
+    FLIGHT_POSITIONS_TABLE_NAME    = module.data_tables.table_names.flight_positions
+    GEOJSON_BUCKET_NAME            = module.geojson_storage.bucket_name
+    USAGE_BUDGET_TABLE_NAME        = module.data_tables.table_names.usage_budget
   }
 
   tags = local.common_tags
@@ -85,6 +187,7 @@ module "fetch_task_queue" {
   dispatcher_lambda_arn           = module.dispatcher_lambda.function_arn
   dispatcher_lambda_function_name = module.dispatcher_lambda.function_name
   dispatcher_schedule_expression  = var.dispatcher_schedule_expression
+  fetch_task_max_receive_count    = var.fetch_task_max_receive_count
   tags                            = local.common_tags
 }
 

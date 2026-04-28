@@ -1,7 +1,19 @@
+resource "aws_sqs_queue" "fetch_task_dlq" {
+  name                      = "${var.name_prefix}-fetch-task-dlq"
+  message_retention_seconds = 1209600
+
+  tags = var.tags
+}
+
 resource "aws_sqs_queue" "fetch_task" {
   name                       = "${var.name_prefix}-fetch-task"
   visibility_timeout_seconds = 60
   message_retention_seconds  = 1209600
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.fetch_task_dlq.arn
+    maxReceiveCount     = var.fetch_task_max_receive_count
+  })
 
   tags = var.tags
 }

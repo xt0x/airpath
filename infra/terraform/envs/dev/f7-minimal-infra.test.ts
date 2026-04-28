@@ -12,6 +12,9 @@ describe("F7-01..04 dev infrastructure contract", () => {
   const httpApiMain = readTerraformFile("modules/api-http/main.tf");
   const lambdaMain = readTerraformFile("modules/compute-lambda/main.tf");
   const eventingMain = readTerraformFile("modules/eventing/main.tf");
+  const dynamodbMain = readTerraformFile("modules/data-dynamodb/main.tf");
+  const storageMain = readTerraformFile("modules/storage-s3/main.tf");
+  const secretsMain = readTerraformFile("modules/secrets/main.tf");
 
   it("routes /v1/* HTTP API traffic to the Go API Lambda integration", () => {
     expect(devMain).toContain('module "http_api"');
@@ -47,5 +50,39 @@ describe("F7-01..04 dev infrastructure contract", () => {
     expect(eventingMain).toContain("var.dispatcher_schedule_expression");
     expect(devMain).toContain("NOOP_FETCH_ENABLED");
     expect(devMain).toContain("FETCH_TASK_QUEUE_URL");
+  });
+
+  it("creates the minimal dev DynamoDB tables for cached flight data and usage budget", () => {
+    expect(devMain).toContain('module "data_tables"');
+    expect(dynamodbMain).toContain('resource "aws_dynamodb_table" "flights"');
+    expect(dynamodbMain).toContain('resource "aws_dynamodb_table" "flight_lookup"');
+    expect(dynamodbMain).toContain('resource "aws_dynamodb_table" "flight_positions"');
+    expect(dynamodbMain).toContain('resource "aws_dynamodb_table" "usage_budget"');
+    expect(devOutputs).toContain("dynamodb_table_names");
+  });
+
+  it("creates a lifecycle-managed S3 bucket for route and track GeoJSON artifacts", () => {
+    expect(devMain).toContain('module "geojson_storage"');
+    expect(storageMain).toContain('resource "aws_s3_bucket" "geojson"');
+    expect(storageMain).toContain('resource "aws_s3_bucket_lifecycle_configuration" "geojson"');
+    expect(storageMain).toContain('prefix = "routes/"');
+    expect(storageMain).toContain('prefix = "tracks/"');
+    expect(devOutputs).toContain("geojson_bucket_name");
+  });
+
+  it("separates fetch task processing from failed task storage with an SQS DLQ", () => {
+    expect(eventingMain).toContain('resource "aws_sqs_queue" "fetch_task_dlq"');
+    expect(eventingMain).toContain("redrive_policy");
+    expect(eventingMain).toContain("fetch_task_dlq");
+    expect(devOutputs).toContain("fetch_task_dlq_url");
+  });
+
+  it("uses Secrets Manager metadata references without raw FlightAware keys in Terraform", () => {
+    expect(devMain).toContain('module "secret_references"');
+    expect(secretsMain).toContain('resource "aws_secretsmanager_secret" "flightaware_api_key"');
+    expect(secretsMain).not.toMatch(/secret_string|secret_binary|x-apikey|API_KEY_VALUE/i);
+    expect(devVariables).toContain("flightaware_api_key_secret_name");
+    expect(devVariables).not.toMatch(/flightaware_api_key\\s*=|api_key_value/i);
+    expect(devOutputs).toContain("flightaware_api_key_secret_arn");
   });
 });

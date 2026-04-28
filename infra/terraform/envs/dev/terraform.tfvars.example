@@ -5,3 +5,7 @@ api_lambda_artifact_path        = "../../../artifacts/dev/api-lambda.zip"
 fetcher_lambda_artifact_path    = "../../../artifacts/dev/fetcher-lambda.zip"
 dispatcher_lambda_artifact_path = "../../../artifacts/dev/dispatcher-lambda.zip"
 dispatcher_schedule_expression = "rate(15 minutes)"
+
+geojson_artifact_retention_days = 30
+fetch_task_max_receive_count    = 3
+flightaware_api_key_secret_name = "airpath/dev/flightaware-api-key"
