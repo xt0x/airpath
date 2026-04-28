@@ -9,6 +9,15 @@ import type {
   UserWatch,
 } from "./index.js";
 import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./index.js";
+import {
+  nullableAirportDisplayText,
+  nullableDateTimeDisplayText,
+  nullableProgressDisplayText,
+  nullableTextDisplayText,
+  normalizeLocalDateTimeToUtcIso,
+  normalizeUtcIsoDateTime,
+  toNullableDisplayValue,
+} from "./index.js";
 
 describe("shared domain models", () => {
   it("represents a flight with nullable FlightAware fields", () => {
@@ -179,5 +188,83 @@ describe("flight leg ID generation", () => {
         legIndex: 1,
       }),
     ).toBe("iflg_de338217b7ac");
+  });
+});
+
+describe("nullable display conversion", () => {
+  it("keeps missing time, aircraft, and registration values explicit", () => {
+    expect(nullableDateTimeDisplayText(null, "not_announced")).toBe("未発表");
+    expect(nullableTextDisplayText(null, "not_acquired")).toBe("未取得");
+    expect(nullableTextDisplayText(undefined, "unavailable")).toBe("取得不可");
+    expect(nullableTextDisplayText("B789", "not_acquired")).toBe("B789");
+    expect(nullableTextDisplayText("N12345", "not_acquired")).toBe("N12345");
+  });
+
+  it("does not treat zero progress as missing", () => {
+    expect(nullableProgressDisplayText(null, "not_acquired")).toBe("未取得");
+    expect(nullableProgressDisplayText(0, "not_acquired")).toBe("0%");
+    expect(nullableProgressDisplayText(62, "not_acquired")).toBe("62%");
+  });
+
+  it("keeps missing airport details explicit without hiding known airport codes", () => {
+    const airportWithMissingDetails: Airport = {
+      code: "RJTT",
+      name: null,
+      timezone: null,
+    };
+
+    expect(nullableAirportDisplayText(null, "not_acquired")).toBe("未取得");
+    expect(nullableAirportDisplayText(airportWithMissingDetails, "not_acquired")).toBe("RJTT");
+    expect(
+      nullableAirportDisplayText(
+        { ...airportWithMissingDetails, name: "Tokyo Haneda" },
+        "not_acquired",
+      ),
+    ).toBe("RJTT - Tokyo Haneda");
+  });
+
+  it("returns structured missing metadata for API callers", () => {
+    expect(toNullableDisplayValue(null, "not_applicable")).toEqual({
+      kind: "missing",
+      reason: "not_applicable",
+      label: "対象外",
+    });
+    expect(toNullableDisplayValue("2026-04-25T10:00:00Z", "not_announced")).toEqual({
+      kind: "available",
+      value: "2026-04-25T10:00:00Z",
+    });
+  });
+});
+
+describe("time normalization", () => {
+  it("normalizes FlightAware ISO timestamps to UTC ISO 8601 seconds", () => {
+    expect(normalizeUtcIsoDateTime("2026-04-25T10:00:00Z")).toBe("2026-04-25T10:00:00Z");
+    expect(normalizeUtcIsoDateTime("2026-04-25T03:00:00-07:00")).toBe("2026-04-25T10:00:00Z");
+    expect(normalizeUtcIsoDateTime("2026-04-25T10:00:00.123Z")).toBe("2026-04-25T10:00:00Z");
+  });
+
+  it("normalizes screen local date-time input with an IANA timezone", () => {
+    expect(
+      normalizeLocalDateTimeToUtcIso({
+        localDateTime: "2026-04-25T19:00:00",
+        timeZone: "Asia/Tokyo",
+      }),
+    ).toBe("2026-04-25T10:00:00Z");
+    expect(
+      normalizeLocalDateTimeToUtcIso({
+        localDateTime: "2026-04-25T03:00:00",
+        timeZone: "America/Los_Angeles",
+      }),
+    ).toBe("2026-04-25T10:00:00Z");
+  });
+
+  it("rejects invalid time inputs instead of guessing", () => {
+    expect(() => normalizeUtcIsoDateTime("2026-04-25 10:00:00")).toThrow("Invalid ISO 8601");
+    expect(() =>
+      normalizeLocalDateTimeToUtcIso({
+        localDateTime: "2026-04-25T19:00:00",
+        timeZone: "Not/AZone",
+      }),
+    ).toThrow("Invalid IANA timezone");
   });
 });

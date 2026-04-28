@@ -158,3 +158,19 @@ export interface FlightSubscription {
 
 export { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./id-generation.js";
 export type { InternalFlightLegIDInput, ProvisionalFlightLegIDInput } from "./id-generation.js";
+export {
+  missingValueLabels,
+  nullableAirportDisplayText,
+  nullableDateTimeDisplayText,
+  nullableProgressDisplayText,
+  nullableTextDisplayText,
+  toNullableDisplayValue,
+} from "./nullable-display.js";
+export type {
+  MissingValueLabel,
+  MissingValueReason,
+  NullableDisplayKind,
+  NullableDisplayValue,
+} from "./nullable-display.js";
+export { normalizeLocalDateTimeToUtcIso, normalizeUtcIsoDateTime } from "./time-normalization.js";
+export type { NormalizeLocalDateTimeInput } from "./time-normalization.js";
