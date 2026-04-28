@@ -245,6 +245,28 @@ func TestDynamoDBRepositoryReconcilesAccountUsageWithoutLoweringLocalEstimate(t 
 	}
 }
 
+func TestDynamoDBRepositoryStoresFlightAwarePositionResponse(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{FlightPositions: "FlightPositions"})
+
+	if err := repo.PutFlightAwarePosition(ctx, "iflg_1", flightaware.PositionResponse{
+		FAFlightID: "fa_1",
+		Latitude:   ptrFloat64(45.12),
+		Longitude:  ptrFloat64(160.45),
+		Timestamp:  "2026-06-20T09:30:00Z",
+	}); err != nil {
+		t.Fatalf("PutFlightAwarePosition() error = %v", err)
+	}
+
+	position, _, err := repo.GetLatestPosition(ctx, "iflg_1")
+	if err != nil {
+		t.Fatalf("GetLatestPosition() error = %v", err)
+	}
+	if position == nil || position.Latitude != 45.12 || position.Longitude != 160.45 || position.Source != domain.PositionSourceFlightAwarePosition {
+		t.Fatalf("position = %#v", position)
+	}
+}
+
 func testFlight(id domain.FlightID, ident string) domain.Flight {
 	internalID := domain.InternalFlightLegID(id)
 	faFlightID := domain.FAFlightID("fa_aws_1")

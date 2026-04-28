@@ -84,6 +84,19 @@ func (r *DynamoDBRepository) PutPosition(ctx context.Context, position domain.Fl
 	})
 }
 
+func (r *DynamoDBRepository) PutFlightAwarePosition(ctx context.Context, flightID domain.FlightID, response flightaware.PositionResponse) error {
+	if response.Latitude == nil || response.Longitude == nil || response.Timestamp == "" {
+		return application.ErrValidation
+	}
+	return r.PutPosition(ctx, domain.FlightPosition{
+		FlightID:  flightID,
+		Latitude:  *response.Latitude,
+		Longitude: *response.Longitude,
+		Timestamp: response.Timestamp,
+		Source:    domain.PositionSourceFlightAwarePosition,
+	})
+}
+
 func (r *DynamoDBRepository) GetLatestPosition(ctx context.Context, flightID domain.FlightID) (*domain.FlightPosition, application.CacheMetadata, error) {
 	items, err := r.client.QueryByPrefix(ctx, r.tables.FlightPositions, "flightId", string(flightID))
 	if err != nil {
