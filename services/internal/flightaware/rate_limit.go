@@ -1,0 +1,103 @@
+package flightaware
+
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+type RateLimitState interface {
+	IsStopped(Endpoint) bool
+	Stop(Endpoint, string)
+	MarkRateLimited(Endpoint, time.Time)
+}
+
+type MemoryRateLimitState struct {
+	mu      sync.RWMutex
+	stopped map[Endpoint]string
+}
+
+func NewMemoryRateLimitState() *MemoryRateLimitState {
+	return &MemoryRateLimitState{stopped: map[Endpoint]string{}}
+}
+
+func (s *MemoryRateLimitState) IsStopped(endpoint Endpoint) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.stopped[endpoint]
+	return ok
+}
+
+func (s *MemoryRateLimitState) Stop(endpoint Endpoint, reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stopped[endpoint] = reason
+}
+
+func (s *MemoryRateLimitState) MarkRateLimited(endpoint Endpoint, until time.Time) {
+	s.Stop(endpoint, until.Format(time.RFC3339))
+}
+
+type RateLimitedClient struct {
+	upstream Client
+	state    RateLimitState
+	backoff  time.Duration
+}
+
+func NewRateLimitedClient(upstream Client, state RateLimitState, backoff time.Duration) *RateLimitedClient {
+	return &RateLimitedClient{upstream: upstream, state: state, backoff: backoff}
+}
+
+func (c *RateLimitedClient) SearchFlights(ctx context.Context, request SearchFlightsRequest) (SearchFlightsResponse, error) {
+	return withRateLimit(ctx, c, EndpointSearch, func() (SearchFlightsResponse, error) {
+		return c.upstream.SearchFlights(ctx, request)
+	})
+}
+
+func (c *RateLimitedClient) GetFlightSummary(ctx context.Context, request FlightSummaryRequest) (FlightSummary, error) {
+	return withRateLimit(ctx, c, EndpointSummary, func() (FlightSummary, error) {
+		return c.upstream.GetFlightSummary(ctx, request)
+	})
+}
+
+func (c *RateLimitedClient) GetFlightRoute(ctx context.Context, request FlightRouteRequest) (RouteResponse, error) {
+	return withRateLimit(ctx, c, EndpointRoute, func() (RouteResponse, error) {
+		return c.upstream.GetFlightRoute(ctx, request)
+	})
+}
+
+func (c *RateLimitedClient) GetFlightPosition(ctx context.Context, request FlightPositionRequest) (PositionResponse, error) {
+	return withRateLimit(ctx, c, EndpointPosition, func() (PositionResponse, error) {
+		return c.upstream.GetFlightPosition(ctx, request)
+	})
+}
+
+func (c *RateLimitedClient) GetFlightTrack(ctx context.Context, request FlightTrackRequest) (TrackResponse, error) {
+	return withRateLimit(ctx, c, EndpointTrack, func() (TrackResponse, error) {
+		return c.upstream.GetFlightTrack(ctx, request)
+	})
+}
+
+func (c *RateLimitedClient) GetSchedules(ctx context.Context, request SchedulesRequest) (SchedulesResponse, error) {
+	return withRateLimit(ctx, c, EndpointSchedule, func() (SchedulesResponse, error) {
+		return c.upstream.GetSchedules(ctx, request)
+	})
+}
+
+func (c *RateLimitedClient) GetAccountUsage(ctx context.Context) (UsageResponse, error) {
+	return c.upstream.GetAccountUsage(ctx)
+}
+
+func withRateLimit[T any](ctx context.Context, client *RateLimitedClient, endpoint Endpoint, call func() (T, error)) (T, error) {
+	if client.state.IsStopped(endpoint) {
+		var zero T
+		return zero, &ClientError{Code: "fetch_disabled", Endpoint: endpoint, Message: "FlightAware fetch is disabled", Err: ErrFlightAwareFetchDisabled}
+	}
+
+	result, err := call()
+	if err != nil && errorCode(err) == "rate_limited" {
+		client.state.MarkRateLimited(endpoint, time.Now().Add(client.backoff))
+	}
+	_ = ctx
+	return result, err
+}
