@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type {
-  Airport,
-  Flight,
-  FlightTimes,
-  FlightEvent,
-  FlightPosition,
-} from "./index.js";
+import type { Airport, Flight, FlightTimes, FlightEvent, FlightPosition } from "./index.js";
 import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./index.js";
 import {
   calculateFlightDuration,
