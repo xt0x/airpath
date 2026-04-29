@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -98,5 +99,28 @@ func TestHandleAPIRequestReportsManualFetchControlConfig(t *testing.T) {
 	}
 	if body["fetchingEnabled"] != true || body["realCallsEnabled"] != true || body["externalCallsAllowed"] != true || body["reason"] != "" {
 		t.Fatalf("resumed body = %#v, want enabled without reason", body)
+	}
+}
+
+func TestHandleAPIRequestRoutesFlightSearchThroughHTTPAdapter(t *testing.T) {
+	t.Setenv("AIRPATH_ENVIRONMENT", "dev")
+	t.Setenv("FLIGHTAWARE_FETCH_ENABLED", "true")
+	t.Setenv("FLIGHTAWARE_REAL_CALLS_ENABLED", "false")
+
+	response, err := handleAPIRequest(events.APIGatewayV2HTTPRequest{
+		RawPath: "/v1/flights/search",
+		QueryStringParameters: map[string]string{
+			"ident": "ANA110",
+		},
+		RequestContext: events.APIGatewayV2HTTPRequestContext{RequestID: "req-search"},
+	})
+	if err != nil {
+		t.Fatalf("handleAPIRequest(search) error = %v", err)
+	}
+	if response.StatusCode != 200 {
+		t.Fatalf("StatusCode = %d, want 200 body=%s", response.StatusCode, response.Body)
+	}
+	if !strings.Contains(response.Body, `"items"`) || !strings.Contains(response.Body, `"cache"`) {
+		t.Fatalf("search body = %s, want application response shape", response.Body)
 	}
 }
