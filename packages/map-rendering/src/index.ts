@@ -1,28 +1,6 @@
 import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
 
-export interface GeoJSONFeature {
-  type: "Feature";
-  geometry: {
-    type: "Point" | "LineString" | "MultiLineString";
-    coordinates: unknown;
-  };
-  properties: Record<string, unknown>;
-}
-
-export interface MapLayer {
-  source?: string;
-  available: boolean;
-  geojson: GeoJSONFeature | null;
-}
-
-export interface FlightMapData {
-  flightId?: string;
-  faFlightId?: string | null;
-  planned: MapLayer;
-  actual: MapLayer;
-  current: MapLayer;
-  cache?: unknown;
-}
+import type { FlightMapDataResponse, GeoJSONFeature } from "@airpath/shared-types";
 
 type DeckLayer = GeoJsonLayer<GeoJSONFeature> | ScatterplotLayer<CurrentPoint>;
 
@@ -31,7 +9,7 @@ interface CurrentPoint {
   timestamp: string | null;
 }
 
-export function buildDeckGlLayers(mapData: FlightMapData | null): DeckLayer[] {
+export function buildDeckGlLayers(mapData: FlightMapDataResponse | null): DeckLayer[] {
   if (mapData === null) {
     return [];
   }

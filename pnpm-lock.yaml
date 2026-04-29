@@ -61,10 +61,11 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
 
-  packages/geo: {}
-
   packages/map-rendering:
     dependencies:
+      '@airpath/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))

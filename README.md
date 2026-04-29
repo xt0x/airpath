@@ -7,7 +7,6 @@ Airpath is a 2D flight route display system built around FlightAware AeroAPI.
 - `frontend`: Next.js / TypeScript web app
 - `services`: Go Lambda services
 - `packages/shared-types`: TypeScript API contracts, shared UI types, and fixtures
-- `packages/geo`: GeoJSON and flight track processing
 - `packages/map-rendering`: Shared Mapbox / deck.gl rendering logic
 - `infra/terraform`: Terraform-managed AWS resources
 - `docs`: ignored local specifications, plans, ADRs, and operations notes
