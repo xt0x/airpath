@@ -20,7 +20,7 @@ locals {
   flightaware_fetch_disabled_reason = var.allow_real_flightaware_calls ? "" : var.flightaware_fetch_disabled_reason
 }
 
-data "aws_iam_policy_document" "dispatcher_noop_enqueue" {
+data "aws_iam_policy_document" "dispatcher_enqueue" {
   statement {
     actions   = ["sqs:SendMessage"]
     resources = [local.fetch_task_queue_arn]
@@ -49,6 +49,11 @@ data "aws_iam_policy_document" "api_data_access" {
       "${module.geojson_storage.bucket_arn}/routes/*",
       "${module.geojson_storage.bucket_arn}/tracks/*",
     ]
+  }
+
+  statement {
+    actions   = ["sqs:SendMessage"]
+    resources = [module.fetch_task_queue.fetch_task_queue_arn]
   }
 
   statement {
@@ -118,7 +123,7 @@ module "api_lambda" {
   source = "../../modules/compute-lambda"
 
   function_name   = "${local.name_prefix}-api"
-  description     = "Airpath dev Go API Lambda shell without direct FlightAware calls."
+  description     = "Airpath dev Go API Lambda."
   artifact_path   = var.api_lambda_artifact_path
   memory_size     = 128
   timeout_seconds = 10
@@ -131,6 +136,7 @@ module "api_lambda" {
     FLIGHTAWARE_FETCH_DISABLED_REASON = local.flightaware_fetch_disabled_reason
     FLIGHTAWARE_FETCH_ENABLED         = local.flightaware_fetch_enabled
     FLIGHTAWARE_REAL_CALLS_ENABLED    = local.flightaware_real_calls_enabled
+    FETCH_TASK_QUEUE_URL              = module.fetch_task_queue.fetch_task_queue_url
     FLIGHTS_TABLE_NAME                = module.data_tables.table_names.flights
     FLIGHT_LOOKUP_TABLE_NAME          = module.data_tables.table_names.flight_lookup
     FLIGHT_POSITIONS_TABLE_NAME       = module.data_tables.table_names.flight_positions
@@ -145,7 +151,7 @@ module "fetcher_lambda" {
   source = "../../modules/compute-lambda"
 
   function_name   = "${local.name_prefix}-fetcher"
-  description     = "Airpath dev SQS-triggered fetcher Lambda shell using mock upstream behavior."
+  description     = "Airpath dev SQS-triggered fetcher Lambda."
   artifact_path   = var.fetcher_lambda_artifact_path
   memory_size     = 128
   timeout_seconds = 30
@@ -173,17 +179,17 @@ module "dispatcher_lambda" {
   source = "../../modules/compute-lambda"
 
   function_name   = "${local.name_prefix}-dispatcher"
-  description     = "Airpath dev no-op due-flight dispatcher Lambda shell."
+  description     = "Airpath dev due-flight dispatcher Lambda."
   artifact_path   = var.dispatcher_lambda_artifact_path
   memory_size     = 128
   timeout_seconds = 10
-  policy_json     = data.aws_iam_policy_document.dispatcher_noop_enqueue.json
+  policy_json     = data.aws_iam_policy_document.dispatcher_enqueue.json
 
   environment_variables = {
     AIRPATH_ENVIRONMENT  = var.environment
     FETCH_TASK_QUEUE_URL = local.fetch_task_queue_url
-    NOOP_FETCH_ENABLED   = "true"
-    DISPATCHER_MODE      = "noop"
+    NOOP_FETCH_ENABLED   = "false"
+    DISPATCHER_MODE      = "active"
   }
 
   tags = local.common_tags

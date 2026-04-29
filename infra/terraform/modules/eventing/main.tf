@@ -27,7 +27,7 @@ resource "aws_lambda_event_source_mapping" "fetcher" {
 
 resource "aws_cloudwatch_event_rule" "dispatcher" {
   name                = "${var.name_prefix}-dispatcher"
-  description         = "Low-frequency no-op dispatcher shell for due-flight selection."
+  description         = "Low-frequency dispatcher for due-flight selection."
   schedule_expression = var.dispatcher_schedule_expression
 
   tags = var.tags

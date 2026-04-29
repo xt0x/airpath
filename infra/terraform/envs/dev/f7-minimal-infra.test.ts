@@ -26,7 +26,7 @@ describe("F7-01..04 dev infrastructure contract", () => {
     expect(devOutputs).toContain("http_api_endpoint");
   });
 
-  it("defines deployable API, fetcher, and dispatcher Lambda shells from artifact references", () => {
+  it("defines deployable API, fetcher, and dispatcher Lambda artifacts from artifact references", () => {
     expect(devMain).toContain('module "api_lambda"');
     expect(devMain).toContain('module "fetcher_lambda"');
     expect(devMain).toContain('module "dispatcher_lambda"');
@@ -43,13 +43,18 @@ describe("F7-01..04 dev infrastructure contract", () => {
     expect(eventingMain).toContain('resource "aws_lambda_event_source_mapping" "fetcher"');
     expect(eventingMain).toContain("event_source_arn = aws_sqs_queue.fetch_task.arn");
     expect(eventingMain).toContain("function_name    = var.fetcher_lambda_arn");
+    expect(devMain).toContain('actions   = ["sqs:SendMessage"]');
+    expect(devMain).toMatch(
+      /FETCH_TASK_QUEUE_URL\s*=\s*module\.fetch_task_queue\.fetch_task_queue_url/,
+    );
   });
 
-  it("wires an EventBridge dispatcher schedule that can enqueue no-op tasks", () => {
+  it("wires an EventBridge dispatcher schedule that can enqueue due-flight tasks", () => {
     expect(eventingMain).toContain('resource "aws_cloudwatch_event_rule" "dispatcher"');
     expect(eventingMain).toContain('resource "aws_cloudwatch_event_target" "dispatcher"');
     expect(eventingMain).toContain("var.dispatcher_schedule_expression");
-    expect(devMain).toContain("NOOP_FETCH_ENABLED");
+    expect(devMain).toContain('NOOP_FETCH_ENABLED   = "false"');
+    expect(devMain).toContain('DISPATCHER_MODE      = "active"');
     expect(devMain).toContain("FETCH_TASK_QUEUE_URL");
   });
 
