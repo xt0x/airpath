@@ -48,13 +48,17 @@ func splitLineStringForAntimeridian(coordinates [][]float64) [][][]float64 {
 			continue
 		}
 
+		adjustedCurrentLongitude := current[0]
 		crossingLongitude := 180.0
 		wrappedLongitude := -180.0
 		if delta > 0 {
+			adjustedCurrentLongitude = current[0] - 360
 			crossingLongitude = -180
 			wrappedLongitude = 180
+		} else {
+			adjustedCurrentLongitude = current[0] + 360
 		}
-		ratio := (crossingLongitude - previous[0]) / delta
+		ratio := (crossingLongitude - previous[0]) / (adjustedCurrentLongitude - previous[0])
 		latitude := previous[1] + (current[1]-previous[1])*ratio
 		segments[len(segments)-1] = append(segments[len(segments)-1], []float64{crossingLongitude, roundCoordinate(latitude)})
 		segments = append(segments, [][]float64{{wrappedLongitude, roundCoordinate(latitude)}, current})

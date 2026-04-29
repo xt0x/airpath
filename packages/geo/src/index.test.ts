@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   buildCurrentPositionFeature,
@@ -127,6 +129,24 @@ describe("antimeridian handling", () => {
         [-170, 40],
       ],
     ]);
+  });
+
+  it("matches the shared backend/frontend antimeridian fixture", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        resolve("..", "shared-types", "fixtures", "geojson", "antimeridian-line.json"),
+        "utf8",
+      ),
+    ) as {
+      input: Array<{ longitude: number; latitude: number }>;
+      expectedCoordinates: number[][][];
+    };
+
+    const split = splitLineStringForAntimeridian(
+      fixture.input.map((point) => [point.longitude, point.latitude]),
+    );
+
+    expect(split).toEqual(fixture.expectedCoordinates);
   });
 });
 
