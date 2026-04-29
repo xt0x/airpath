@@ -65,3 +65,5 @@ Every success response carries `CacheMetadata` so callers can distinguish fresh 
 Usage status includes the monthly budget scope (`environment` and `month`) so the API contract matches the backend DynamoDB usage budget state.
 
 `FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
+
+The package also exports TypeScript response interfaces for the API contract so frontend callers do not redefine response shapes independently from the shared contract source.

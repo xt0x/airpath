@@ -1,10 +1,9 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import { buildDeckGlLayers } from "@airpath/map-rendering";
 
 import { AirpathApiClient } from "./api-client";
-import { buildDeckGlLayers } from "./map-layers";
-import { sampleDetail, sampleMapData, sampleSearch, sampleUsage } from "./sample-data";
 import type {
   ApiError,
   CacheMetadata,
@@ -20,14 +19,12 @@ interface FlightDashboardProps {
 
 export function FlightDashboard({ apiClient }: FlightDashboardProps) {
   const client = useMemo(() => apiClient ?? new AirpathApiClient(), [apiClient]);
-  const [query, setQuery] = useState("ANA110");
-  const [searchResults, setSearchResults] = useState<FlightSummaryItem[]>(sampleSearch.items);
-  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(
-    sampleSearch.items[0]?.flightId ?? null,
-  );
-  const [detail, setDetail] = useState<FlightDetailResponse | null>(sampleDetail);
-  const [mapData, setMapData] = useState<FlightMapDataResponse | null>(sampleMapData);
-  const [usage, setUsage] = useState<UsageStatusResponse | null>(sampleUsage);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FlightSummaryItem[]>([]);
+  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<FlightDetailResponse | null>(null);
+  const [mapData, setMapData] = useState<FlightMapDataResponse | null>(null);
+  const [usage, setUsage] = useState<UsageStatusResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);

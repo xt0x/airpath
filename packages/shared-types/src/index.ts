@@ -162,4 +162,23 @@ export {
   fetchTaskTypes,
   mvpExcludedContracts,
 } from "./api-contract.js";
-export type { ApiErrorCode, FetchTaskType, MvpExcludedContract } from "./api-contract.js";
+export type {
+  ApiError,
+  ApiErrorCode,
+  CacheFreshness,
+  CacheMetadata,
+  CacheSource,
+  FetchTask,
+  FetchTaskType,
+  FlightDetailResponse,
+  FlightMapDataResponse,
+  FlightRefreshResponse,
+  FlightSearchResponse,
+  FlightSummaryItem,
+  GeoJSONFeature,
+  MapLayer,
+  MapSource,
+  MvpExcludedContract,
+  Position,
+  UsageStatusResponse,
+} from "./api-contract.js";

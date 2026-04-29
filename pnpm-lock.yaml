@@ -69,7 +69,11 @@ importers:
 
   packages/geo: {}
 
-  packages/map-rendering: {}
+  packages/map-rendering:
+    dependencies:
+      '@deck.gl/layers':
+        specifier: ^9.3.1
+        version: 9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))
 
   packages/shared-types: {}
 

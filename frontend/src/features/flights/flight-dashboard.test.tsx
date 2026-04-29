@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
+  FlightDashboard,
   FlightDashboardView,
   FlightMap,
   RefreshControls,
@@ -13,6 +14,14 @@ import {
 import { sampleDetail, sampleMapData, sampleSearch, sampleUsage } from "./sample-data";
 
 describe("flight dashboard UI", () => {
+  it("starts production dashboard state without fixture flight data", () => {
+    const html = renderToStaticMarkup(<FlightDashboard />);
+
+    expect(html).not.toContain("ANA110");
+    expect(html).not.toContain("Tokyo Haneda");
+    expect(html).toContain("Usage unavailable");
+  });
+
   it("renders search input and selectable flight results", () => {
     const html = renderToStaticMarkup(
       <SearchPanel

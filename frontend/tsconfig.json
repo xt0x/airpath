@@ -9,6 +9,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "paths": {
+      "@airpath/map-rendering": ["../packages/map-rendering/src/index.ts"],
       "@airpath/shared-types": ["../packages/shared-types/src/index.ts"]
     },
     "plugins": [
