@@ -6,11 +6,11 @@ AWS resources are managed with Terraform. Lambda and Next.js build artifacts are
 
 - `bootstrap`: Initial state bucket, KMS, OIDC, and Terraform execution role setup
 - `envs/dev`: implemented personal demo environment
-- `envs/stg`: placeholder root reserved for later staging work
-- `envs/prod`: placeholder root reserved for later production work
+- `envs/stg`: staging root with backend, provider, variable, and output configuration only
+- `envs/prod`: production root with backend, provider, variable, and output configuration only
 - `modules`: Reusable modules
 
-Only the dev environment is currently implemented. The stg and prod roots intentionally contain placeholders so environment naming, backend keys, and CI validation paths can be introduced without implying deployable staging or production infrastructure.
+Only the dev environment currently declares resources. The stg and prod roots keep only the files required to validate environment naming, backend keys, variables, and CI paths without implying deployable staging or production infrastructure.
 
 ## Naming And Secrets
 
