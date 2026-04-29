@@ -10,9 +10,9 @@ Airpath is a 2D flight route display system built around FlightAware AeroAPI.
 - `packages/geo`: GeoJSON and flight track processing
 - `packages/map-rendering`: Shared Mapbox / deck.gl rendering logic
 - `infra/terraform`: Terraform-managed AWS resources
-- `docs`: Specifications, plans, ADRs, and operations documents
+- `docs`: ignored local specifications, plans, ADRs, and operations notes
 
-The root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.prettierrc.json`, and `tsconfig.base.json` configure the pnpm workspace and shared development commands. They are not application source. Next.js-specific configuration, dependencies, and environment examples live under `frontend`. App Router source files live under `frontend/src/app`.
+The root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.prettierrc.json`, and `tsconfig.base.json` configure the pnpm workspace and shared development commands. They are not application source. Next.js-specific configuration, dependencies, and environment examples live under `frontend`. App Router source files live under `frontend/src/app`. Files under `docs/` are ignored local planning artifacts unless the ignore policy is explicitly changed.
 
 ## Commands
 
