@@ -1,3 +1,15 @@
+import type {
+  Airport as DomainAirport,
+  FAFlightID,
+  Flight,
+  FlightID,
+  FlightIDType,
+  FlightTimes as DomainFlightTimes,
+  ISODateTimeString,
+  PositionSource,
+  ProvisionalFlightLegID,
+} from "./index.js";
+
 export const apiErrorCodes = [
   "flightaware_budget_exceeded",
   "flightaware_rate_limited",
@@ -18,14 +30,13 @@ export type MvpExcludedContract = (typeof mvpExcludedContracts)[number];
 
 export type CacheFreshness = "fresh" | "stale" | "miss";
 export type CacheSource = "cache" | "flightaware" | "local_accounting" | "derived";
-export type FlightIDType = "internal" | "provisional";
+export type { FlightIDType, PositionSource } from "./index.js";
 export type MapSource =
   | "flightaware_route"
   | "airport_great_circle_fallback"
   | "flightaware_track"
   | "flightaware_track_and_position"
   | "flightaware_position";
-export type PositionSource = "flightaware_position" | "flightaware_track" | "manual";
 
 export interface CacheMetadata {
   freshness: CacheFreshness;
@@ -47,56 +58,39 @@ export interface ApiError {
 }
 
 export interface FlightSummaryItem {
-  flightId: string;
+  flightId: FlightID;
   flightIdType: FlightIDType;
-  provisionalFlightLegId: string | null;
-  faFlightId: string | null;
+  provisionalFlightLegId: ProvisionalFlightLegID | null;
+  faFlightId: FAFlightID | null;
   ident: string;
   identIata: string | null;
   origin: string;
   destination: string;
-  scheduledOut: string | null;
+  scheduledOut: ISODateTimeString | null;
   legIndex: number | null;
   status: string;
 }
 
-export interface Airport {
-  code: string;
-  name: string | null;
-  timezone: string | null;
-}
+export type Airport = DomainAirport;
+export type FlightTimes = DomainFlightTimes;
 
-export interface FlightTimes {
-  scheduledOut: string | null;
-  estimatedOut: string | null;
-  actualOut: string | null;
-  scheduledOff: string | null;
-  estimatedOff: string | null;
-  actualOff: string | null;
-  scheduledOn: string | null;
-  estimatedOn: string | null;
-  actualOn: string | null;
-  scheduledIn: string | null;
-  estimatedIn: string | null;
-  actualIn: string | null;
-}
-
-export interface FlightDetail {
-  flightId: string;
-  flightIdType: FlightIDType;
-  provisionalFlightLegId: string | null;
-  faFlightId: string | null;
-  ident: string;
-  identIata: string | null;
-  aircraftType: string | null;
-  registration: string | null;
-  origin: Airport;
-  destination: Airport;
-  legIndex: number | null;
-  status: string;
-  progressPercent: number | null;
-  times: FlightTimes;
-}
+export type FlightDetail = Pick<
+  Flight,
+  | "flightId"
+  | "flightIdType"
+  | "provisionalFlightLegId"
+  | "faFlightId"
+  | "ident"
+  | "identIata"
+  | "aircraftType"
+  | "registration"
+  | "origin"
+  | "destination"
+  | "legIndex"
+  | "status"
+  | "progressPercent"
+  | "times"
+>;
 
 export interface GeoJSONFeature {
   type: "Feature";
@@ -139,8 +133,8 @@ export interface FlightDetailResponse {
 }
 
 export interface FlightMapDataResponse {
-  flightId: string;
-  faFlightId: string | null;
+  flightId: FlightID;
+  faFlightId: FAFlightID | null;
   planned: MapLayer;
   actual: MapLayer;
   current: MapLayer;

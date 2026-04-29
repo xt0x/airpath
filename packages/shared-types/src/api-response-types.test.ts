@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type {
+  Airport,
   FlightMapDataResponse,
+  FlightTimes,
   FlightSearchResponse,
   UsageStatusResponse,
 } from "./api-contract.js";
+import type { Airport as DomainAirport, FlightTimes as DomainFlightTimes } from "./index.js";
 
 describe("API response types", () => {
   it("export source-of-truth TypeScript shapes for frontend API clients", () => {
@@ -62,5 +65,31 @@ describe("API response types", () => {
     expect(search.items).toEqual([]);
     expect(mapData.current.source).toBe("flightaware_position");
     expect(usage.budget.currency).toBe("USD");
+  });
+
+  it("derives duplicated API response value objects from the shared domain model", () => {
+    const airport = {
+      code: "RJTT",
+      name: "Tokyo Haneda",
+      timezone: "Asia/Tokyo",
+    } satisfies Airport satisfies DomainAirport;
+
+    const times = {
+      scheduledOut: null,
+      estimatedOut: null,
+      actualOut: null,
+      scheduledOff: null,
+      estimatedOff: null,
+      actualOff: null,
+      scheduledOn: null,
+      estimatedOn: null,
+      actualOn: null,
+      scheduledIn: null,
+      estimatedIn: null,
+      actualIn: null,
+    } satisfies FlightTimes satisfies DomainFlightTimes;
+
+    expect(airport.code).toBe("RJTT");
+    expect(times.actualIn).toBeNull();
   });
 });

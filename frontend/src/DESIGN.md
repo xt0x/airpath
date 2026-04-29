@@ -17,6 +17,8 @@ The map surface consumes normalized route, track, and current-position layers fr
 
 The runtime dashboard starts from empty API state. Fixture data remains in feature-local test helpers and must not be used as production initial state.
 
+The flight feature keeps the stateful dashboard container, presentational dashboard view, SVG map fallback, and formatting helpers in separate files so UI composition, map rendering, and data formatting can evolve independently.
+
 ## F17 Personal Demo Notice
 
 The dashboard topbar includes a short personal non-commercial low-frequency notice so the deployed dev demo does not present itself as a commercial or high-frequency tracking surface. The notice is static UI copy; runtime fetch control and real-call opt-in state still come from the backend usage and fetch-control APIs.

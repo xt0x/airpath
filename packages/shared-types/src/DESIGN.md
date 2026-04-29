@@ -67,3 +67,5 @@ Usage status includes the monthly budget scope (`environment` and `month`) so th
 `FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
 
 The package also exports TypeScript response interfaces for the API contract so frontend callers do not redefine response shapes independently from the shared contract source.
+
+API response value objects that overlap with the shared domain model, such as airports and flight times, are derived from the domain exports instead of being redefined separately.
