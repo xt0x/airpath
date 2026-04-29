@@ -95,6 +95,23 @@ type Position struct {
 	Source               domain.PositionSource `json:"source"`
 }
 
+type FlightDetail struct {
+	FlightID               domain.FlightID                `json:"flightId"`
+	FlightIDType           domain.FlightIDType            `json:"flightIdType"`
+	ProvisionalFlightLegID *domain.ProvisionalFlightLegID `json:"provisionalFlightLegId"`
+	FAFlightID             *domain.FAFlightID             `json:"faFlightId"`
+	Ident                  string                         `json:"ident"`
+	IdentIATA              *string                        `json:"identIata"`
+	AircraftType           *string                        `json:"aircraftType"`
+	Registration           *string                        `json:"registration"`
+	Origin                 domain.Airport                 `json:"origin"`
+	Destination            domain.Airport                 `json:"destination"`
+	LegIndex               *int                           `json:"legIndex"`
+	Status                 string                         `json:"status"`
+	ProgressPercent        *int                           `json:"progressPercent"`
+	Times                  domain.FlightTimes             `json:"times"`
+}
+
 type FlightSummaryItem struct {
 	FlightID               domain.FlightID                `json:"flightId"`
 	FlightIDType           domain.FlightIDType            `json:"flightIdType"`
@@ -115,7 +132,7 @@ type FlightSearchResponse struct {
 }
 
 type FlightDetailResponse struct {
-	Flight  domain.Flight `json:"flight"`
+	Flight  FlightDetail  `json:"flight"`
 	Route   MapLayer      `json:"route"`
 	Track   MapLayer      `json:"track"`
 	Current *Position     `json:"current"`
@@ -185,6 +202,34 @@ type UsageStatusInput struct {
 	CheckedAt string
 }
 
+type ExternalRouteFix struct {
+	Name      string
+	Latitude  *float64
+	Longitude *float64
+}
+
+type ExternalRouteResponse struct {
+	RouteText *string
+	Fixes     []ExternalRouteFix
+}
+
+type ExternalPositionResponse struct {
+	FAFlightID string
+	Latitude   *float64
+	Longitude  *float64
+	Timestamp  string
+}
+
+type ExternalTrackPoint struct {
+	Latitude  float64
+	Longitude float64
+	Timestamp string
+}
+
+type ExternalTrackResponse struct {
+	Positions []ExternalTrackPoint
+}
+
 const DefaultSoftStopThresholdUSD = 4.00
 
 type UsageBudgetScope struct {
@@ -236,6 +281,8 @@ type APIError struct {
 
 var (
 	ErrBudgetExceeded        = errors.New("flightaware budget exceeded")
+	ErrUpstreamRateLimited   = errors.New("upstream rate limited")
+	ErrUpstreamFetchDisabled = errors.New("upstream fetch disabled")
 	ErrStaleCacheUnavailable = errors.New("stale cache unavailable")
 	ErrNotFound              = errors.New("not found")
 	ErrValidation            = errors.New("validation failed")

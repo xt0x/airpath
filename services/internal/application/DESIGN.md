@@ -11,6 +11,8 @@ The `application` package owns backend use cases that can run without AWS adapte
 - When fetching is disabled but cached flight data exists, refresh returns an empty task list with stale cache metadata instead of forcing an upstream fetch error.
 - Usage status returns local accounting and rate-limit state without calling AWS.
 - Usage budget state is normalized around a monthly environment scope and defaults to a USD 4.00 soft stop threshold.
-- Error mapping converts application and FlightAware boundary errors into the shared typed API error schema.
+- Error mapping converts application-owned upstream boundary errors into the shared typed API error schema.
 - F15 polling owns conservative low-frequency scheduling, due-flight dispatch, fetch task execution, flight-level leases, route/track artifact updates, position history appends, idle stop behavior, and safe diagnostic metadata for failed fetch tasks.
 - Lambda dispatcher and fetcher entrypoints now call the application polling dispatcher and fetch processor through runtime wiring instead of remaining no-op shells.
+- Fetch processor ports use application-owned DTOs for route, position, and track responses. FlightAware-specific request and response types are translated in adapter code before crossing into the application layer.
+- Flight detail responses expose the public API detail DTO instead of the full cached domain record, preventing lease, polling, and internal storage fields from leaking through the HTTP contract.

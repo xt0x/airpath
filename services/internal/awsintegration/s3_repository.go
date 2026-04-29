@@ -29,12 +29,20 @@ func (r *S3GeoJSONRepository) StoreTrack(ctx context.Context, flightID domain.Fl
 	return key, r.putLayer(ctx, key, layer)
 }
 
-func (r *S3GeoJSONRepository) StoreFlightAwareRoute(ctx context.Context, flightID domain.FlightID, response flightaware.RouteResponse) (string, error) {
+func (r *S3GeoJSONRepository) StoreRouteArtifact(ctx context.Context, flightID domain.FlightID, response application.ExternalRouteResponse) (string, error) {
 	return r.StoreRoute(ctx, flightID, routeLayerFromFlightAware(response))
 }
 
-func (r *S3GeoJSONRepository) StoreFlightAwareTrack(ctx context.Context, flightID domain.FlightID, response flightaware.TrackResponse) (string, error) {
+func (r *S3GeoJSONRepository) StoreTrackArtifact(ctx context.Context, flightID domain.FlightID, response application.ExternalTrackResponse) (string, error) {
 	return r.StoreTrack(ctx, flightID, trackLayerFromFlightAware(response))
+}
+
+func (r *S3GeoJSONRepository) StoreFlightAwareRoute(ctx context.Context, flightID domain.FlightID, response flightaware.RouteResponse) (string, error) {
+	return r.StoreRouteArtifact(ctx, flightID, externalRouteResponse(response))
+}
+
+func (r *S3GeoJSONRepository) StoreFlightAwareTrack(ctx context.Context, flightID domain.FlightID, response flightaware.TrackResponse) (string, error) {
+	return r.StoreTrackArtifact(ctx, flightID, externalTrackResponse(response))
 }
 
 func (r *S3GeoJSONRepository) GetPlannedRoute(ctx context.Context, flight domain.Flight) (application.MapLayer, error) {
@@ -71,7 +79,7 @@ func (r *S3GeoJSONRepository) getLayer(ctx context.Context, key string) (applica
 	return layer, nil
 }
 
-func routeLayerFromFlightAware(response flightaware.RouteResponse) application.MapLayer {
+func routeLayerFromFlightAware(response application.ExternalRouteResponse) application.MapLayer {
 	points := make([]geojson.Point, 0, len(response.Fixes))
 	for _, fix := range response.Fixes {
 		if fix.Latitude == nil || fix.Longitude == nil {
@@ -86,7 +94,7 @@ func routeLayerFromFlightAware(response flightaware.RouteResponse) application.M
 	return application.MapLayer{Source: application.MapSourceFlightAwareRoute, Available: true, GeoJSON: feature}
 }
 
-func trackLayerFromFlightAware(response flightaware.TrackResponse) application.MapLayer {
+func trackLayerFromFlightAware(response application.ExternalTrackResponse) application.MapLayer {
 	points := make([]geojson.Point, 0, len(response.Positions))
 	for _, position := range response.Positions {
 		points = append(points, geojson.Point{Longitude: position.Longitude, Latitude: position.Latitude})
@@ -100,4 +108,28 @@ func trackLayerFromFlightAware(response flightaware.TrackResponse) application.M
 
 func ptrString(value string) *string {
 	return &value
+}
+
+func externalRouteResponse(response flightaware.RouteResponse) application.ExternalRouteResponse {
+	fixes := make([]application.ExternalRouteFix, 0, len(response.Fixes))
+	for _, fix := range response.Fixes {
+		fixes = append(fixes, application.ExternalRouteFix{
+			Name:      fix.Name,
+			Latitude:  fix.Latitude,
+			Longitude: fix.Longitude,
+		})
+	}
+	return application.ExternalRouteResponse{RouteText: response.RouteText, Fixes: fixes}
+}
+
+func externalTrackResponse(response flightaware.TrackResponse) application.ExternalTrackResponse {
+	positions := make([]application.ExternalTrackPoint, 0, len(response.Positions))
+	for _, position := range response.Positions {
+		positions = append(positions, application.ExternalTrackPoint{
+			Latitude:  position.Latitude,
+			Longitude: position.Longitude,
+			Timestamp: position.Timestamp,
+		})
+	}
+	return application.ExternalTrackResponse{Positions: positions}
 }

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"airpath/services/internal/domain"
-	"airpath/services/internal/flightaware"
 )
 
 const (
@@ -273,8 +272,8 @@ type PositionHistoryStore interface {
 }
 
 type FlightArtifactStore interface {
-	StoreFlightAwareRoute(context.Context, domain.FlightID, flightaware.RouteResponse) (string, error)
-	StoreFlightAwareTrack(context.Context, domain.FlightID, flightaware.TrackResponse) (string, error)
+	StoreRouteArtifact(context.Context, domain.FlightID, ExternalRouteResponse) (string, error)
+	StoreTrackArtifact(context.Context, domain.FlightID, ExternalTrackResponse) (string, error)
 }
 
 type FetchTaskDiagnosticStore interface {
@@ -282,9 +281,9 @@ type FetchTaskDiagnosticStore interface {
 }
 
 type FetchFlightAwareClient interface {
-	GetFlightRoute(context.Context, flightaware.FlightRouteRequest) (flightaware.RouteResponse, error)
-	GetFlightPosition(context.Context, flightaware.FlightPositionRequest) (flightaware.PositionResponse, error)
-	GetFlightTrack(context.Context, flightaware.FlightTrackRequest) (flightaware.TrackResponse, error)
+	GetFlightRoute(context.Context, string) (ExternalRouteResponse, error)
+	GetFlightPosition(context.Context, string) (ExternalPositionResponse, error)
+	GetFlightTrack(context.Context, string) (ExternalTrackResponse, error)
 }
 
 type FetchTaskDiagnostic struct {
@@ -389,7 +388,7 @@ func (p *FetchProcessor) Process(ctx context.Context, task FetchTask, input Proc
 }
 
 func (p *FetchProcessor) processPosition(ctx context.Context, flight domain.Flight, task FetchTask, now time.Time, result ProcessFetchResult) (ProcessFetchResult, error) {
-	response, err := p.flightAware.GetFlightPosition(ctx, flightaware.FlightPositionRequest{FAFlightID: string(*flight.FAFlightID)})
+	response, err := p.flightAware.GetFlightPosition(ctx, string(*flight.FAFlightID))
 	if err != nil {
 		return result, err
 	}
@@ -412,11 +411,11 @@ func (p *FetchProcessor) processPosition(ctx context.Context, flight domain.Flig
 }
 
 func (p *FetchProcessor) processRoute(ctx context.Context, flight domain.Flight, task FetchTask, now time.Time, result ProcessFetchResult) (ProcessFetchResult, error) {
-	response, err := p.flightAware.GetFlightRoute(ctx, flightaware.FlightRouteRequest{FAFlightID: string(*flight.FAFlightID)})
+	response, err := p.flightAware.GetFlightRoute(ctx, string(*flight.FAFlightID))
 	if err != nil {
 		return result, err
 	}
-	key, err := p.artifacts.StoreFlightAwareRoute(ctx, flight.FlightID, response)
+	key, err := p.artifacts.StoreRouteArtifact(ctx, flight.FlightID, response)
 	if err != nil {
 		return result, err
 	}
@@ -431,11 +430,11 @@ func (p *FetchProcessor) processRoute(ctx context.Context, flight domain.Flight,
 }
 
 func (p *FetchProcessor) processTrack(ctx context.Context, flight domain.Flight, task FetchTask, now time.Time, result ProcessFetchResult) (ProcessFetchResult, error) {
-	response, err := p.flightAware.GetFlightTrack(ctx, flightaware.FlightTrackRequest{FAFlightID: string(*flight.FAFlightID)})
+	response, err := p.flightAware.GetFlightTrack(ctx, string(*flight.FAFlightID))
 	if err != nil {
 		return result, err
 	}
-	key, err := p.artifacts.StoreFlightAwareTrack(ctx, flight.FlightID, response)
+	key, err := p.artifacts.StoreTrackArtifact(ctx, flight.FlightID, response)
 	if err != nil {
 		return result, err
 	}
@@ -479,7 +478,7 @@ func (p *FetchProcessor) recordDiagnostic(ctx context.Context, task FetchTask, f
 	})
 }
 
-func positionFromFlightAware(flight domain.Flight, response flightaware.PositionResponse) (domain.FlightPosition, bool) {
+func positionFromFlightAware(flight domain.Flight, response ExternalPositionResponse) (domain.FlightPosition, bool) {
 	if response.Latitude == nil || response.Longitude == nil || response.Timestamp == "" {
 		return domain.FlightPosition{}, false
 	}
@@ -495,9 +494,9 @@ func positionFromFlightAware(flight domain.Flight, response flightaware.Position
 
 func fetchErrorCode(err error) string {
 	switch {
-	case errors.Is(err, flightaware.ErrFlightAwareRateLimited):
+	case errors.Is(err, ErrUpstreamRateLimited):
 		return "rate_limited"
-	case errors.Is(err, flightaware.ErrFlightAwareFetchDisabled):
+	case errors.Is(err, ErrUpstreamFetchDisabled):
 		return "fetch_disabled"
 	case errors.Is(err, ErrValidation):
 		return "validation_failed"

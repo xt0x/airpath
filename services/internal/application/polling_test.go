@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"airpath/services/internal/domain"
-	"airpath/services/internal/flightaware"
 )
 
 func TestPollSchedulePolicyComputesConservativeNextPolls(t *testing.T) {
@@ -90,7 +89,7 @@ func TestFetchProcessorUsesFlightLeaseToPreventDuplicateFlightAwareCalls(t *test
 	flight.FetchOwner = ptr("other-worker")
 	store := newMemoryFetchFlightStore(flight)
 	client := &countingFlightAwareClient{
-		position: flightaware.PositionResponse{
+		position: ExternalPositionResponse{
 			FAFlightID: "fa_1",
 			Latitude:   ptrFloat64(45.1),
 			Longitude:  ptrFloat64(160.2),
@@ -128,7 +127,7 @@ func TestFetchProcessorUpdatesLatestPositionAndHistory(t *testing.T) {
 	flight := testFlight("iflg_position", "ANA110")
 	store := newMemoryFetchFlightStore(flight)
 	client := &countingFlightAwareClient{
-		position: flightaware.PositionResponse{
+		position: ExternalPositionResponse{
 			FAFlightID: "fa_1",
 			Latitude:   ptrFloat64(45.1),
 			Longitude:  ptrFloat64(160.2),
@@ -165,11 +164,11 @@ func TestFetchProcessorStoresRouteAndTrackOnlyForExplicitTasks(t *testing.T) {
 	flight := testFlight("iflg_layers", "ANA110")
 	store := newMemoryFetchFlightStore(flight)
 	client := &countingFlightAwareClient{
-		route: flightaware.RouteResponse{Fixes: []flightaware.RouteFix{
+		route: ExternalRouteResponse{Fixes: []ExternalRouteFix{
 			{Name: "RJTT", Latitude: ptrFloat64(35.55), Longitude: ptrFloat64(139.78)},
 			{Name: "KJFK", Latitude: ptrFloat64(40.64), Longitude: ptrFloat64(-73.78)},
 		}},
-		track: flightaware.TrackResponse{Positions: []flightaware.TrackPoint{
+		track: ExternalTrackResponse{Positions: []ExternalTrackPoint{
 			{Latitude: 35.55, Longitude: 139.78, Timestamp: "2026-04-29T00:00:00Z"},
 			{Latitude: 40.64, Longitude: -73.78, Timestamp: "2026-04-29T12:00:00Z"},
 		}},
@@ -224,7 +223,7 @@ func TestFetchProcessorRecordsSafeDiagnosticForFailedTasks(t *testing.T) {
 	now := mustTime(t, "2026-04-29T00:00:00Z")
 	flight := testFlight("iflg_fail", "ANA110")
 	store := newMemoryFetchFlightStore(flight)
-	client := &countingFlightAwareClient{err: flightaware.NewRateLimitedError(flightaware.EndpointPosition, 429, "limited")}
+	client := &countingFlightAwareClient{err: ErrUpstreamRateLimited}
 	processor := NewFetchProcessor(FetchProcessorConfig{
 		Flights:     store,
 		Positions:   store,
@@ -234,7 +233,7 @@ func TestFetchProcessorRecordsSafeDiagnosticForFailedTasks(t *testing.T) {
 	})
 
 	_, err := processor.Process(ctx, taskFor(flight, FetchTaskPosition), ProcessFetchInput{Now: now, WorkerID: "worker-1"})
-	if !errors.Is(err, flightaware.ErrFlightAwareRateLimited) {
+	if !errors.Is(err, ErrUpstreamRateLimited) {
 		t.Fatalf("Process(failed) error = %v, want rate limited", err)
 	}
 	if len(store.diagnostics) != 1 {
@@ -355,12 +354,12 @@ func (s *memoryFetchFlightStore) AppendPosition(_ context.Context, position doma
 	return nil
 }
 
-func (s *memoryFetchFlightStore) StoreFlightAwareRoute(_ context.Context, flightID domain.FlightID, _ flightaware.RouteResponse) (string, error) {
+func (s *memoryFetchFlightStore) StoreRouteArtifact(_ context.Context, flightID domain.FlightID, _ ExternalRouteResponse) (string, error) {
 	s.routeCount++
 	return "routes/" + string(flightID) + ".json", nil
 }
 
-func (s *memoryFetchFlightStore) StoreFlightAwareTrack(_ context.Context, flightID domain.FlightID, _ flightaware.TrackResponse) (string, error) {
+func (s *memoryFetchFlightStore) StoreTrackArtifact(_ context.Context, flightID domain.FlightID, _ ExternalTrackResponse) (string, error) {
 	s.trackCount++
 	return "tracks/" + string(flightID) + ".json", nil
 }
@@ -371,35 +370,35 @@ func (s *memoryFetchFlightStore) RecordFetchTaskDiagnostic(_ context.Context, di
 }
 
 type countingFlightAwareClient struct {
-	position      flightaware.PositionResponse
-	route         flightaware.RouteResponse
-	track         flightaware.TrackResponse
+	position      ExternalPositionResponse
+	route         ExternalRouteResponse
+	track         ExternalTrackResponse
 	err           error
 	positionCalls int
 	routeCalls    int
 	trackCalls    int
 }
 
-func (c *countingFlightAwareClient) GetFlightPosition(context.Context, flightaware.FlightPositionRequest) (flightaware.PositionResponse, error) {
+func (c *countingFlightAwareClient) GetFlightPosition(context.Context, string) (ExternalPositionResponse, error) {
 	c.positionCalls++
 	if c.err != nil {
-		return flightaware.PositionResponse{}, c.err
+		return ExternalPositionResponse{}, c.err
 	}
 	return c.position, nil
 }
 
-func (c *countingFlightAwareClient) GetFlightRoute(context.Context, flightaware.FlightRouteRequest) (flightaware.RouteResponse, error) {
+func (c *countingFlightAwareClient) GetFlightRoute(context.Context, string) (ExternalRouteResponse, error) {
 	c.routeCalls++
 	if c.err != nil {
-		return flightaware.RouteResponse{}, c.err
+		return ExternalRouteResponse{}, c.err
 	}
 	return c.route, nil
 }
 
-func (c *countingFlightAwareClient) GetFlightTrack(context.Context, flightaware.FlightTrackRequest) (flightaware.TrackResponse, error) {
+func (c *countingFlightAwareClient) GetFlightTrack(context.Context, string) (ExternalTrackResponse, error) {
 	c.trackCalls++
 	if c.err != nil {
-		return flightaware.TrackResponse{}, c.err
+		return ExternalTrackResponse{}, c.err
 	}
 	return c.track, nil
 }

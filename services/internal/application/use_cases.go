@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"airpath/services/internal/domain"
-	"airpath/services/internal/flightaware"
 )
 
 const FetchTaskDedupeWindow = 5 * time.Minute
@@ -67,7 +66,7 @@ func (a *Application) GetFlightDetail(ctx context.Context, input FlightDetailInp
 	}
 
 	return FlightDetailResponse{
-		Flight:  flight,
+		Flight:  detailFromFlight(flight),
 		Route:   route,
 		Track:   track,
 		Current: mapPosition(currentPosition),
@@ -176,13 +175,13 @@ func MapApplicationError(err error, requestID string) APIError {
 	switch {
 	case errors.Is(err, ErrBudgetExceeded):
 		return apiError(ApiErrorFlightAwareBudgetExceeded, "FlightAware budget has been exceeded", false, requestID)
-	case errors.Is(err, flightaware.ErrFlightAwareRateLimited):
+	case errors.Is(err, ErrUpstreamRateLimited):
 		return apiError(ApiErrorFlightAwareRateLimited, "FlightAware rate limit is active", true, requestID)
 	case errors.Is(err, ErrStaleCacheUnavailable):
 		apiErr := apiError(ApiErrorStaleCacheUnavailable, "No fresh or stale cache is available", false, requestID)
 		apiErr.StaleCacheAvailable = false
 		return apiErr
-	case errors.Is(err, flightaware.ErrFlightAwareFetchDisabled):
+	case errors.Is(err, ErrUpstreamFetchDisabled):
 		return apiError(ApiErrorFlightAwareFetchDisabled, "FlightAware fetch is disabled", false, requestID)
 	case errors.Is(err, ErrNotFound):
 		return apiError(ApiErrorStaleCacheUnavailable, "Requested cached resource was not found", false, requestID)
@@ -211,6 +210,25 @@ func summarizeFlights(flights []domain.Flight) []FlightSummaryItem {
 		})
 	}
 	return items
+}
+
+func detailFromFlight(flight domain.Flight) FlightDetail {
+	return FlightDetail{
+		FlightID:               flight.FlightID,
+		FlightIDType:           flight.FlightIDType,
+		ProvisionalFlightLegID: flight.ProvisionalFlightLegID,
+		FAFlightID:             flight.FAFlightID,
+		Ident:                  flight.Ident,
+		IdentIATA:              flight.IdentIATA,
+		AircraftType:           flight.AircraftType,
+		Registration:           flight.Registration,
+		Origin:                 flight.Origin,
+		Destination:            flight.Destination,
+		LegIndex:               flight.LegIndex,
+		Status:                 flight.Status,
+		ProgressPercent:        flight.ProgressPercent,
+		Times:                  flight.Times,
+	}
 }
 
 func mapPosition(position *domain.FlightPosition) *Position {

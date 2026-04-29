@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"airpath/services/internal/application"
-	"airpath/services/internal/awsintegration"
 	"airpath/services/internal/runtimewiring"
 	"github.com/aws/aws-lambda-go/lambda"
 )
@@ -68,42 +67,9 @@ func handleDispatcherEvent(json.RawMessage) (dispatcherResponse, error) {
 }
 
 func buildPollingDispatcher(_ context.Context, dependencies runtimeDependencies) (pollingDispatcher, error) {
-	tables := awsintegration.DynamoDBTables{
-		Flights:         envOrDefault("FLIGHTS_TABLE_NAME", "flights"),
-		FlightLookup:    envOrDefault("FLIGHT_LOOKUP_TABLE_NAME", "flight-lookup"),
-		FlightPositions: envOrDefault("FLIGHT_POSITIONS_TABLE_NAME", "flight-positions"),
-		UsageBudget:     envOrDefault("USAGE_BUDGET_TABLE_NAME", "usage-budget"),
-	}
-	repository := awsintegration.NewScopedDynamoDBRepository(dependencies.DynamoDB, tables, usageScope())
-	return application.NewPollingDispatcher(application.PollingDispatcherConfig{
-		Flights:    repository,
-		FetchTasks: awsintegration.NewSQSFetchTaskQueue(dependencies.Queues, envOrDefault("FETCH_TASK_QUEUE_URL", "memory")),
-		UsageGuard: repository,
-		Schedule:   application.DefaultPollSchedulePolicy(),
-	}), nil
+	return runtimewiring.NewPollingDispatcher(dependencies, os.Getenv, time.Now().UTC()), nil
 }
 
 func runtimeBackend(lookup func(string) string) runtimewiring.Backend {
-	if explicit := strings.ToLower(strings.TrimSpace(lookup("AIRPATH_RUNTIME_BACKEND"))); explicit == string(runtimewiring.BackendMemory) {
-		return runtimewiring.BackendMemory
-	}
-	if lookup("AWS_LAMBDA_FUNCTION_NAME") == "" {
-		return runtimewiring.BackendMemory
-	}
-	return runtimewiring.BackendAWS
-}
-
-func usageScope() application.UsageBudgetScope {
-	return application.UsageBudgetScope{
-		Environment: envOrDefault("AIRPATH_ENVIRONMENT", "local"),
-		Month:       time.Now().UTC().Format("2006-01"),
-	}
-}
-
-func envOrDefault(name string, fallback string) string {
-	value := os.Getenv(name)
-	if value == "" {
-		return fallback
-	}
-	return value
+	return runtimewiring.BackendFromEnv(lookup)
 }

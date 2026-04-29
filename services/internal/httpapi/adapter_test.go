@@ -71,7 +71,7 @@ func TestAdapterMapsApplicationErrorToTypedResponse(t *testing.T) {
 func TestAdapterMapsFlightDetailMapRefreshAndUsageRoutes(t *testing.T) {
 	app := &stubApplication{
 		detailResponse: application.FlightDetailResponse{
-			Flight: testFlight("iflg_1"),
+			Flight: testFlightDetail("iflg_1"),
 			Cache:  application.CacheMetadata{Freshness: application.CacheFreshnessFresh, Source: application.CacheSourceCache},
 		},
 		mapResponse: application.FlightMapDataResponse{
@@ -200,15 +200,14 @@ func request(method string, path string, body string) events.APIGatewayV2HTTPReq
 	}
 }
 
-func testFlight(flightID string) domain.Flight {
-	return domain.Flight{
+func testFlightDetail(flightID string) application.FlightDetail {
+	return application.FlightDetail{
 		FlightID:     domain.FlightID(flightID),
 		FlightIDType: domain.FlightIDTypeInternal,
 		Ident:        "ANA110",
 		Origin:       domain.Airport{Code: "RJTT"},
 		Destination:  domain.Airport{Code: "KJFK"},
 		Status:       "En Route",
-		UpdatedAt:    "2026-04-29T00:00:00Z",
 	}
 }
 

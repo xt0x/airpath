@@ -2,11 +2,11 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"airpath/services/internal/domain"
-	"airpath/services/internal/flightaware"
 )
 
 func TestSearchFlightsUsesCacheFirstAndDoesNotEnqueueOnHit(t *testing.T) {
@@ -79,6 +79,13 @@ func TestGetFlightDetailReturnsCachedFlightWithRouteTrackAndCurrentPositionFresh
 
 	if response.Flight.FlightID != flight.FlightID {
 		t.Fatalf("flight ID = %q, want %q", response.Flight.FlightID, flight.FlightID)
+	}
+	body, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	if jsonContainsKey(body, "operator") || jsonContainsKey(body, "fetchLeaseUntil") || jsonContainsKey(body, "nextSummaryPollAt") {
+		t.Fatalf("flight detail response leaked internal fields: %s", body)
 	}
 	if !response.Route.Available || !response.Track.Available || response.Current == nil {
 		t.Fatalf("detail did not include cached map/current state: %#v", response)
@@ -282,9 +289,9 @@ func TestMapApplicationErrorProducesTypedAPIError(t *testing.T) {
 		code ApiErrorCode
 	}{
 		{name: "budget", err: ErrBudgetExceeded, code: ApiErrorFlightAwareBudgetExceeded},
-		{name: "rate", err: flightaware.NewRateLimitedError(flightaware.EndpointRoute, 429, "limited"), code: ApiErrorFlightAwareRateLimited},
+		{name: "rate", err: ErrUpstreamRateLimited, code: ApiErrorFlightAwareRateLimited},
 		{name: "stale cache", err: ErrStaleCacheUnavailable, code: ApiErrorStaleCacheUnavailable},
-		{name: "fetch disabled", err: flightaware.ErrFlightAwareFetchDisabled, code: ApiErrorFlightAwareFetchDisabled},
+		{name: "fetch disabled", err: ErrUpstreamFetchDisabled, code: ApiErrorFlightAwareFetchDisabled},
 		{name: "validation", err: ErrValidation, code: ApiErrorUpstreamFailure},
 		{name: "not found", err: ErrNotFound, code: ApiErrorStaleCacheUnavailable},
 		{name: "upstream", err: errors.New("upstream failed"), code: ApiErrorUpstreamFailure},
@@ -377,4 +384,33 @@ func ptrDomainID(id domain.FlightID) *domain.InternalFlightLegID {
 
 func ptrInt(value int) *int {
 	return &value
+}
+
+func jsonContainsKey(body []byte, key string) bool {
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		return false
+	}
+	return containsMapKey(value, key)
+}
+
+func containsMapKey(value any, key string) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, ok := typed[key]; ok {
+			return true
+		}
+		for _, child := range typed {
+			if containsMapKey(child, key) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if containsMapKey(child, key) {
+				return true
+			}
+		}
+	}
+	return false
 }
