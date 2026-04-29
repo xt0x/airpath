@@ -10,6 +10,7 @@ import {
   StaleDataNotice,
   SummaryPanel,
   UsageStatusBanner,
+  loadFlightSnapshot,
 } from "./flight-dashboard";
 import { sampleDetail, sampleMapData, sampleSearch, sampleUsage } from "./sample-data";
 
@@ -137,5 +138,32 @@ describe("flight dashboard UI", () => {
 
     expect(dashboard).toContain("Personal non-commercial demo");
     expect(dashboard).toContain("low-frequency");
+  });
+
+  it("loads the reusable detail, map, and usage snapshot in parallel", async () => {
+    const calls: string[] = [];
+    const client = {
+      async getFlightDetail(flightId: string) {
+        calls.push(`detail:${flightId}`);
+        return sampleDetail;
+      },
+      async getFlightMapData(flightId: string) {
+        calls.push(`map:${flightId}`);
+        return sampleMapData;
+      },
+      async getUsageStatus() {
+        calls.push("usage");
+        return sampleUsage;
+      },
+    };
+
+    const snapshot = await loadFlightSnapshot(client, "iflg_1");
+
+    expect(snapshot).toEqual({
+      detail: sampleDetail,
+      mapData: sampleMapData,
+      usage: sampleUsage,
+    });
+    expect(calls).toEqual(["detail:iflg_1", "map:iflg_1", "usage"]);
   });
 });

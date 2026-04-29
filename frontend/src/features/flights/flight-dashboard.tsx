@@ -26,6 +26,18 @@ interface FlightDashboardProps {
   apiClient?: AirpathApiClient;
 }
 
+interface FlightSnapshotClient {
+  getFlightDetail(flightId: string): Promise<FlightDetailResponse>;
+  getFlightMapData(flightId: string): Promise<FlightMapDataResponse>;
+  getUsageStatus(): Promise<UsageStatusResponse>;
+}
+
+interface FlightSnapshot {
+  detail: FlightDetailResponse;
+  mapData: FlightMapDataResponse;
+  usage: UsageStatusResponse;
+}
+
 export function FlightDashboard({ apiClient }: FlightDashboardProps) {
   const client = useMemo(() => apiClient ?? new AirpathApiClient(), [apiClient]);
   const [query, setQuery] = useState("");
@@ -60,14 +72,7 @@ export function FlightDashboard({ apiClient }: FlightDashboardProps) {
     setError(null);
     setSelectedFlightId(flightId);
     try {
-      const [detailResponse, mapResponse, usageResponse] = await Promise.all([
-        client.getFlightDetail(flightId),
-        client.getFlightMapData(flightId),
-        client.getUsageStatus(),
-      ]);
-      setDetail(detailResponse);
-      setMapData(mapResponse);
-      setUsage(usageResponse);
+      applyFlightSnapshot(await loadFlightSnapshot(client, flightId));
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -81,19 +86,18 @@ export function FlightDashboard({ apiClient }: FlightDashboardProps) {
     setError(null);
     try {
       await client.requestFlightRefresh(selectedFlightId, ["position", "route", "track"]);
-      const [detailResponse, mapResponse, usageResponse] = await Promise.all([
-        client.getFlightDetail(selectedFlightId),
-        client.getFlightMapData(selectedFlightId),
-        client.getUsageStatus(),
-      ]);
-      setDetail(detailResponse);
-      setMapData(mapResponse);
-      setUsage(usageResponse);
+      applyFlightSnapshot(await loadFlightSnapshot(client, selectedFlightId));
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
       setIsRefreshing(false);
     }
+  }
+
+  function applyFlightSnapshot(snapshot: FlightSnapshot) {
+    setDetail(snapshot.detail);
+    setMapData(snapshot.mapData);
+    setUsage(snapshot.usage);
   }
 
   return (
@@ -113,4 +117,16 @@ export function FlightDashboard({ apiClient }: FlightDashboardProps) {
       onSelectFlight={loadFlight}
     />
   );
+}
+
+export async function loadFlightSnapshot(
+  client: FlightSnapshotClient,
+  flightId: string,
+): Promise<FlightSnapshot> {
+  const [detail, mapData, usage] = await Promise.all([
+    client.getFlightDetail(flightId),
+    client.getFlightMapData(flightId),
+    client.getUsageStatus(),
+  ]);
+  return { detail, mapData, usage };
 }
