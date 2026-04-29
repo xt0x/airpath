@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"testing"
 
+	"airpath/services/internal/application"
 	"github.com/aws/aws-lambda-go/events"
 )
 
@@ -44,7 +46,7 @@ func TestHandleFetchEventReportsProcessedSQSRecordsWithoutFetching(t *testing.T)
 		t.Fatal("ExternalFetchAllowed = true, want false")
 	}
 	if body.ExternalFetchAttempted {
-		t.Fatal("ExternalFetchAttempted = true, want false for F8 shell")
+		t.Fatal("ExternalFetchAttempted = true, want false while external fetch is disabled")
 	}
 }
 
@@ -68,6 +70,48 @@ func TestHandleFetchEventRequiresBothRuntimeFlagsToAllowExternalFetches(t *testi
 		t.Fatal("ExternalFetchAllowed = false, want true")
 	}
 	if body.ExternalFetchAttempted {
-		t.Fatal("ExternalFetchAttempted = true, want false until real worker integration is wired")
+		t.Fatal("ExternalFetchAttempted = true, want false without task records")
 	}
+}
+
+func TestHandleFetchEventProcessesFetchTasksWhenExternalFetchIsAllowed(t *testing.T) {
+	t.Setenv("AIRPATH_ENVIRONMENT", "dev")
+	t.Setenv("FETCHER_MODE", "real-opt-in")
+	t.Setenv("FLIGHTAWARE_FETCH_ENABLED", "true")
+	t.Setenv("FLIGHTAWARE_REAL_CALLS_ENABLED", "true")
+
+	original := newFetchProcessor
+	t.Cleanup(func() { newFetchProcessor = original })
+	processed := 0
+	newFetchProcessor = func(context.Context, runtimeDependencies) (fetchProcessor, error) {
+		return fetchProcessorFunc(func(_ context.Context, task application.FetchTask, _ application.ProcessFetchInput) (application.ProcessFetchResult, error) {
+			processed++
+			if task.TaskID != "task-1" {
+				t.Fatalf("TaskID = %q, want task-1", task.TaskID)
+			}
+			return application.ProcessFetchResult{ExternalFetchAttempted: true, UpdatedPositionCount: 1}, nil
+		}), nil
+	}
+
+	body, err := handleFetchEvent(events.SQSEvent{
+		Records: []events.SQSMessage{{
+			MessageId: "task-1",
+			Body:      `{"schemaVersion":1,"taskId":"task-1","taskType":"position","flightId":"iflg_1","faFlightId":"fa_1","requestedAt":"2026-04-29T00:00:00Z","reason":"low_frequency_poll","idempotencyKey":"task-1"}`,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("handleFetchEvent() error = %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("processed = %d, want 1", processed)
+	}
+	if !body.ExternalFetchAttempted {
+		t.Fatal("ExternalFetchAttempted = false, want true")
+	}
+}
+
+type fetchProcessorFunc func(context.Context, application.FetchTask, application.ProcessFetchInput) (application.ProcessFetchResult, error)
+
+func (f fetchProcessorFunc) Process(ctx context.Context, task application.FetchTask, input application.ProcessFetchInput) (application.ProcessFetchResult, error) {
+	return f(ctx, task, input)
 }

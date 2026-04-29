@@ -103,6 +103,7 @@ func TestHandleAPIRequestReportsManualFetchControlConfig(t *testing.T) {
 }
 
 func TestHandleAPIRequestRoutesFlightSearchThroughHTTPAdapter(t *testing.T) {
+	t.Setenv("AIRPATH_RUNTIME_BACKEND", "memory")
 	t.Setenv("AIRPATH_ENVIRONMENT", "dev")
 	t.Setenv("FLIGHTAWARE_FETCH_ENABLED", "true")
 	t.Setenv("FLIGHTAWARE_REAL_CALLS_ENABLED", "false")
@@ -122,5 +123,34 @@ func TestHandleAPIRequestRoutesFlightSearchThroughHTTPAdapter(t *testing.T) {
 	}
 	if !strings.Contains(response.Body, `"items"`) || !strings.Contains(response.Body, `"cache"`) {
 		t.Fatalf("search body = %s, want application response shape", response.Body)
+	}
+}
+
+func TestRuntimeBackendDefaultsToAWSOnlyInsideLambda(t *testing.T) {
+	if got := runtimeBackend(func(string) string { return "" }); got != runtimeBackendMemory {
+		t.Fatalf("runtimeBackend(outside lambda) = %q, want memory", got)
+	}
+
+	got := runtimeBackend(func(name string) string {
+		if name == "AWS_LAMBDA_FUNCTION_NAME" {
+			return "airpath-dev-api"
+		}
+		return ""
+	})
+	if got != runtimeBackendAWS {
+		t.Fatalf("runtimeBackend(inside lambda) = %q, want aws", got)
+	}
+
+	got = runtimeBackend(func(name string) string {
+		if name == "AIRPATH_RUNTIME_BACKEND" {
+			return "memory"
+		}
+		if name == "AWS_LAMBDA_FUNCTION_NAME" {
+			return "airpath-dev-api"
+		}
+		return ""
+	})
+	if got != runtimeBackendMemory {
+		t.Fatalf("runtimeBackend(explicit memory) = %q, want memory", got)
 	}
 }

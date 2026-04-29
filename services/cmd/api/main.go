@@ -5,14 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"airpath/services/internal/application"
 	"airpath/services/internal/awsintegration"
 	"airpath/services/internal/httpapi"
 	"airpath/services/internal/runtimeconfig"
+	"airpath/services/internal/runtimewiring"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+)
+
+const (
+	runtimeBackendAWS    = runtimewiring.BackendAWS
+	runtimeBackendMemory = runtimewiring.BackendMemory
 )
 
 type apiHealthResponse struct {
@@ -72,7 +79,11 @@ func handleAPIRequest(request events.APIGatewayV2HTTPRequest) (events.APIGateway
 		})
 	}
 
-	return newHTTPAdapter(config).Handle(context.Background(), request)
+	adapter, err := newHTTPAdapter(context.Background(), config)
+	if err != nil {
+		return events.APIGatewayV2HTTPResponse{}, err
+	}
+	return adapter.Handle(context.Background(), request)
 }
 
 func jsonBody(body any) (events.APIGatewayV2HTTPResponse, error) {
@@ -89,10 +100,11 @@ func jsonBody(body any) (events.APIGatewayV2HTTPResponse, error) {
 	}, nil
 }
 
-func newHTTPAdapter(config runtimeconfig.FlightAwareRuntimeConfig) *httpapi.Adapter {
-	dynamoClient := awsintegration.NewMemoryDynamoDBClient()
-	queueClient := awsintegration.NewMemoryQueueClient()
-	objectClient := awsintegration.NewMemoryObjectClient()
+func newHTTPAdapter(ctx context.Context, config runtimeconfig.FlightAwareRuntimeConfig) (*httpapi.Adapter, error) {
+	dependencies, err := runtimewiring.NewDependencies(ctx, runtimeBackend(os.Getenv))
+	if err != nil {
+		return nil, err
+	}
 	tables := awsintegration.DynamoDBTables{
 		Flights:         envOrDefault("FLIGHTS_TABLE_NAME", "flights"),
 		FlightLookup:    envOrDefault("FLIGHT_LOOKUP_TABLE_NAME", "flight-lookup"),
@@ -103,7 +115,7 @@ func newHTTPAdapter(config runtimeconfig.FlightAwareRuntimeConfig) *httpapi.Adap
 		Environment: config.Environment,
 		Month:       time.Now().UTC().Format("2006-01"),
 	}
-	repository := awsintegration.NewScopedDynamoDBRepository(dynamoClient, tables, usageScope)
+	repository := awsintegration.NewScopedDynamoDBRepository(dependencies.DynamoDB, tables, usageScope)
 	fetchPolicy := application.NewRuntimeFetchPolicy(application.RuntimeFetchConfig{
 		RouteFetchEnabled:      config.FetchEnabled,
 		TrackFetchEnabled:      config.FetchEnabled,
@@ -111,13 +123,23 @@ func newHTTPAdapter(config runtimeconfig.FlightAwareRuntimeConfig) *httpapi.Adap
 	})
 	app := application.New(application.Config{
 		Flights:     repository,
-		MapData:     awsintegration.NewS3GeoJSONRepository(objectClient, envOrDefault("GEOJSON_BUCKET_NAME", "geojson")),
+		MapData:     awsintegration.NewS3GeoJSONRepository(dependencies.Objects, envOrDefault("GEOJSON_BUCKET_NAME", "geojson")),
 		Positions:   repository,
-		FetchTasks:  awsintegration.NewSQSFetchTaskQueue(queueClient, envOrDefault("FETCH_TASK_QUEUE_URL", "memory")),
+		FetchTasks:  awsintegration.NewSQSFetchTaskQueue(dependencies.Queues, envOrDefault("FETCH_TASK_QUEUE_URL", "memory")),
 		UsageGuard:  runtimeUsageGuard{upstream: repository, config: config, usageScope: usageScope},
 		FetchPolicy: fetchPolicy,
 	})
-	return httpapi.NewAdapter(app)
+	return httpapi.NewAdapter(app), nil
+}
+
+func runtimeBackend(lookup func(string) string) runtimewiring.Backend {
+	if explicit := strings.ToLower(strings.TrimSpace(lookup("AIRPATH_RUNTIME_BACKEND"))); explicit == string(runtimewiring.BackendMemory) {
+		return runtimewiring.BackendMemory
+	}
+	if lookup("AWS_LAMBDA_FUNCTION_NAME") == "" {
+		return runtimewiring.BackendMemory
+	}
+	return runtimewiring.BackendAWS
 }
 
 type runtimeUsageGuard struct {

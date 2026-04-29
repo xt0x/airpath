@@ -7,6 +7,7 @@ import (
 	"airpath/services/internal/application"
 	"airpath/services/internal/domain"
 	"airpath/services/internal/flightaware"
+	"airpath/services/internal/geojson"
 )
 
 type S3GeoJSONRepository struct {
@@ -71,43 +72,30 @@ func (r *S3GeoJSONRepository) getLayer(ctx context.Context, key string) (applica
 }
 
 func routeLayerFromFlightAware(response flightaware.RouteResponse) application.MapLayer {
-	coordinates := make([][]float64, 0, len(response.Fixes))
+	points := make([]geojson.Point, 0, len(response.Fixes))
 	for _, fix := range response.Fixes {
 		if fix.Latitude == nil || fix.Longitude == nil {
 			continue
 		}
-		coordinates = append(coordinates, []float64{*fix.Longitude, *fix.Latitude})
+		points = append(points, geojson.Point{Longitude: *fix.Longitude, Latitude: *fix.Latitude})
 	}
-	if len(coordinates) < 2 {
+	feature, ok := geojson.LineFeature(string(application.MapSourceFlightAwareRoute), "planned_route", points)
+	if !ok {
 		return application.MapLayer{Source: application.MapSourceFlightAwareRoute, Available: false, UnavailableReason: ptrString("route coordinates unavailable")}
 	}
-	return lineLayer(application.MapSourceFlightAwareRoute, "planned_route", coordinates)
+	return application.MapLayer{Source: application.MapSourceFlightAwareRoute, Available: true, GeoJSON: feature}
 }
 
 func trackLayerFromFlightAware(response flightaware.TrackResponse) application.MapLayer {
-	coordinates := make([][]float64, 0, len(response.Positions))
+	points := make([]geojson.Point, 0, len(response.Positions))
 	for _, position := range response.Positions {
-		coordinates = append(coordinates, []float64{position.Longitude, position.Latitude})
+		points = append(points, geojson.Point{Longitude: position.Longitude, Latitude: position.Latitude})
 	}
-	if len(coordinates) < 2 {
+	feature, ok := geojson.LineFeature(string(application.MapSourceFlightAwareTrack), "actual_track", points)
+	if !ok {
 		return application.MapLayer{Source: application.MapSourceFlightAwareTrack, Available: false, UnavailableReason: ptrString("track coordinates unavailable")}
 	}
-	return lineLayer(application.MapSourceFlightAwareTrack, "actual_track", coordinates)
-}
-
-func lineLayer(source application.MapSource, kind string, coordinates [][]float64) application.MapLayer {
-	return application.MapLayer{
-		Source:    source,
-		Available: true,
-		GeoJSON: map[string]any{
-			"type": "Feature",
-			"geometry": map[string]any{
-				"type":        "LineString",
-				"coordinates": coordinates,
-			},
-			"properties": map[string]any{"kind": kind},
-		},
-	}
+	return application.MapLayer{Source: application.MapSourceFlightAwareTrack, Available: true, GeoJSON: feature}
 }
 
 func ptrString(value string) *string {

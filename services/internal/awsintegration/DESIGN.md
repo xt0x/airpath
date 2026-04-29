@@ -11,5 +11,6 @@ The `awsintegration` package contains adapter code that translates application p
 - SQS fetch task queue performs local idempotency checks before sending task messages.
 - F15 worker adapters list due polling flights, maintain flight-level fetch leases in the cached flight record, append position history, and send redacted fetch failure diagnostics to the configured diagnostic/DLQ queue.
 - Secrets adapter returns raw secret values to callers while logging only secret references.
+- AWS SDK v2 client adapters implement the same small DynamoDB, S3, SQS, and Secrets Manager client interfaces used by in-memory tests. DynamoDB prefix reads use scan-based filtering because the current personal-demo tables are optimized for simple key-value access rather than secondary-index prefix queries.
 
-Real AWS SDK clients can be wrapped behind these small interfaces in the later deployment integration work.
+Lambda runtime wiring selects these AWS adapters in deployed environments and keeps memory adapters available for local tests.
