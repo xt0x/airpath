@@ -1,9 +1,12 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const readRepoFile = (path: string): string => readFileSync(path, "utf8");
-const readTerraformFile = (path: string): string => readRepoFile(join("infra/terraform", path));
+import {
+  bodyIncludes,
+  hasAttribute,
+  readRepoFile,
+  readTerraformFile,
+  variableBlock,
+} from "../../test-support/hcl";
 
 describe("F17 personal demo deployment contract", () => {
   const devMain = readTerraformFile("envs/dev/main.tf");
@@ -14,8 +17,8 @@ describe("F17 personal demo deployment contract", () => {
   const terraformReadme = readRepoFile("infra/terraform/README.md");
 
   it("keeps dev real FlightAware calls disabled unless an explicit opt-in flag is set", () => {
-    expect(devVariables).toContain('variable "allow_real_flightaware_calls"');
-    expect(devVariables).toContain("default     = false");
+    const optInVariable = variableBlock(devVariables, "allow_real_flightaware_calls");
+    expect(hasAttribute(optInVariable, "default", /false/)).toBe(true);
     expect(devMain).toMatch(
       /flightaware_real_calls_enabled\s*=\s*var\.allow_real_flightaware_calls/,
     );
@@ -28,11 +31,16 @@ describe("F17 personal demo deployment contract", () => {
 
   it("marks dev as a personal non-commercial low-frequency demo in runtime config", () => {
     expect(devMain).toContain("AIRPATH_PERSONAL_DEMO_NOTICE");
-    expect(devVariables).toContain("personal non-commercial low-frequency");
+    expect(
+      bodyIncludes(
+        variableBlock(devVariables, "personal_demo_notice"),
+        "personal non-commercial low-frequency",
+      ),
+    ).toBe(true);
     expect(devMain).toMatch(
       /FETCHER_MODE\s*=\s*var\.allow_real_flightaware_calls \? "real-opt-in" : "mock"/,
     );
-    expect(devVariables).toContain('variable "personal_demo_notice"');
+    expect(variableBlock(devVariables, "personal_demo_notice")).toBeDefined();
   });
 
   it("documents artifact deployment and personal-use acceptance runs", () => {
