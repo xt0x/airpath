@@ -12,8 +12,14 @@ import (
 func (r *DynamoDBRepository) PutUsageStatus(ctx context.Context, scope string, status application.UsageStatus) error {
 	status = application.NormalizeUsageStatus(status)
 	return r.client.PutItem(ctx, r.tables.UsageBudget, map[string]any{
-		"budgetScope": scope,
-		"body":        mustJSON(status),
+		"budgetScope":              scope,
+		"body":                     mustJSON(status),
+		"environment":              status.Budget.Environment,
+		"month":                    status.Budget.Month,
+		"currency":                 status.Budget.Currency,
+		"estimatedMonthToDateCost": status.Budget.EstimatedMonthToDateCost,
+		"softStopThreshold":        status.Budget.SoftStopThreshold,
+		"fetchingEnabled":          status.FetchingEnabled,
 	})
 }
 
@@ -24,21 +30,10 @@ func (r *DynamoDBRepository) PutMonthlyUsageStatus(ctx context.Context, scope ap
 }
 
 func (r *DynamoDBRepository) GetUsageStatus(ctx context.Context) (application.UsageStatus, error) {
-	if r.usageScope.Key() != "" {
-		return r.GetMonthlyUsageStatus(ctx, r.usageScope)
+	if r.usageScope.Key() == "" {
+		return application.UsageStatus{}, application.ErrValidation
 	}
-	items, err := r.client.QueryByPrefix(ctx, r.tables.UsageBudget, "budgetScope", "")
-	if err != nil {
-		return application.UsageStatus{}, err
-	}
-	if len(items) == 0 {
-		return application.UsageStatus{}, application.ErrNotFound
-	}
-	var status application.UsageStatus
-	if err := json.Unmarshal([]byte(stringValue(items[len(items)-1]["body"])), &status); err != nil {
-		return application.UsageStatus{}, err
-	}
-	return application.NormalizeUsageStatus(status), nil
+	return r.GetMonthlyUsageStatus(ctx, r.usageScope)
 }
 
 func (r *DynamoDBRepository) GetMonthlyUsageStatus(ctx context.Context, scope application.UsageBudgetScope) (application.UsageStatus, error) {
@@ -49,12 +44,30 @@ func (r *DynamoDBRepository) GetMonthlyUsageStatus(ctx context.Context, scope ap
 	if !ok {
 		return application.UsageStatus{}, application.ErrNotFound
 	}
+	return usageStatusFromItem(scope, item)
+}
+
+func usageStatusFromItem(scope application.UsageBudgetScope, item map[string]any) (application.UsageStatus, error) {
 	var status application.UsageStatus
-	if err := json.Unmarshal([]byte(stringValue(item["body"])), &status); err != nil {
-		return application.UsageStatus{}, err
+	if body := stringValue(item["body"]); body != "" {
+		if err := json.Unmarshal([]byte(body), &status); err != nil {
+			return application.UsageStatus{}, err
+		}
 	}
 	status.Budget.Environment = scope.Environment
 	status.Budget.Month = scope.Month
+	if currency := stringValue(item["currency"]); currency != "" {
+		status.Budget.Currency = currency
+	}
+	if _, ok := item["estimatedMonthToDateCost"]; ok {
+		status.Budget.EstimatedMonthToDateCost = numberValue(item["estimatedMonthToDateCost"])
+	}
+	if _, ok := item["softStopThreshold"]; ok {
+		status.Budget.SoftStopThreshold = numberValue(item["softStopThreshold"])
+	}
+	if fetchingEnabled, ok := item["fetchingEnabled"].(bool); ok {
+		status.FetchingEnabled = fetchingEnabled
+	}
 	return application.NormalizeUsageStatus(status), nil
 }
 
@@ -78,49 +91,46 @@ func (r *DynamoDBRepository) RecordFlightAwareCall(ctx context.Context, record f
 	if scope.Key() == "" {
 		return application.ErrValidation
 	}
-	status, err := r.GetMonthlyUsageStatus(ctx, scope)
+	item, err := r.client.AddUsageEstimate(ctx, r.tables.UsageBudget, scope.Key(), map[string]any{
+		"environment":       scope.Environment,
+		"month":             scope.Month,
+		"currency":          "USD",
+		"softStopThreshold": application.DefaultSoftStopThresholdUSD,
+		"fetchingEnabled":   true,
+	}, record.EstimatedCostUSD)
 	if err != nil {
-		if !errors.Is(err, application.ErrNotFound) {
-			return err
-		}
-		status = application.UsageStatus{
-			Budget: application.UsageBudgetStatus{
-				Environment:       scope.Environment,
-				Month:             scope.Month,
-				Currency:          "USD",
-				SoftStopThreshold: application.DefaultSoftStopThresholdUSD,
-			},
-			FetchingEnabled: true,
-		}
+		return err
 	}
-	status.Budget.EstimatedMonthToDateCost += record.EstimatedCostUSD
-	return r.PutMonthlyUsageStatus(ctx, scope, status)
+	status, err := usageStatusFromItem(scope, item)
+	if err != nil {
+		return err
+	}
+	if status.Budget.Stopped || !status.FetchingEnabled {
+		return application.ErrBudgetExceeded
+	}
+	return nil
 }
 
 func (r *DynamoDBRepository) ReconcileAccountUsage(ctx context.Context, scope application.UsageBudgetScope, response flightaware.UsageResponse) error {
 	if scope.Key() == "" {
 		return application.ErrValidation
 	}
-	status, err := r.GetMonthlyUsageStatus(ctx, scope)
+	currency := response.Currency
+	if currency == "" {
+		currency = "USD"
+	}
+	_, _, err := r.client.PutUsageEstimateIfHigher(ctx, r.tables.UsageBudget, scope.Key(), map[string]any{
+		"environment":       scope.Environment,
+		"month":             scope.Month,
+		"currency":          currency,
+		"softStopThreshold": application.DefaultSoftStopThresholdUSD,
+		"fetchingEnabled":   true,
+	}, response.MonthToDate.EstimatedCostUSD)
 	if err != nil {
-		if !errors.Is(err, application.ErrNotFound) {
-			return err
+		if errors.Is(err, application.ErrNotFound) {
+			return nil
 		}
-		status = application.UsageStatus{
-			Budget: application.UsageBudgetStatus{
-				Environment:       scope.Environment,
-				Month:             scope.Month,
-				Currency:          response.Currency,
-				SoftStopThreshold: application.DefaultSoftStopThresholdUSD,
-			},
-			FetchingEnabled: true,
-		}
+		return err
 	}
-	if response.Currency != "" {
-		status.Budget.Currency = response.Currency
-	}
-	if response.MonthToDate.EstimatedCostUSD > status.Budget.EstimatedMonthToDateCost {
-		status.Budget.EstimatedMonthToDateCost = response.MonthToDate.EstimatedCostUSD
-	}
-	return r.PutMonthlyUsageStatus(ctx, scope, status)
+	return nil
 }

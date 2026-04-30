@@ -1,18 +1,22 @@
 # AWS Integration Design
 
-The `awsintegration` package contains adapter code that translates application ports to AWS-shaped clients. Tests use in-memory clients with the same adapter contracts so CI can verify serialization, keys, dedupe, and secret handling without provisioning AWS resources.
+The `awsintegration` package contains adapters that translate application ports to AWS-shaped storage, queue, object, secret, and FlightAware boundary clients. AWS SDK v2 details stay behind local interfaces, and memory implementations of the same interfaces are kept for tests and local command execution.
 
-- DynamoDB repository methods serialize cached flights, lookup rows, latest positions, and monthly usage budget state by environment and month.
-- DynamoDB repository implementation is split by responsibility across flight lookup/cache, position history, and usage budget files while keeping one adapter facade for application ports.
-- FlightAware API keys can be resolved from `FLIGHTAWARE_API_KEY` or `FLIGHTAWARE_API_KEY_SECRET_ARN`, with the raw key passed only to the FlightAware transport.
-- DynamoDB can store normalized FlightAware `/position` responses as `FlightPositions`.
-- The usage budget repository normalizes the default USD 4.00 soft stop threshold and can record local FlightAware call estimates before upstream fetches.
-- Usage reconciliation compares local estimates with FlightAware account usage and keeps the higher month-to-date cost so delayed remote usage cannot reduce the local guard.
-- S3 GeoJSON repository stores and loads route and track map layers under `routes/` and `tracks/` keys, including normalized FlightAware `/route` and `/track` responses.
-- SQS fetch task queue performs local idempotency checks before sending task messages.
-- F15 worker adapters list due polling flights, maintain flight-level fetch leases in the cached flight record, append position history, and send redacted fetch failure diagnostics to the configured diagnostic/DLQ queue.
-- Secrets adapter returns raw secret values to callers while logging only secret references.
-- FlightAware fetch adapters translate FlightAware transport DTOs and errors into application-owned DTOs and boundary errors before invoking fetch processor ports.
-- AWS SDK v2 client adapters implement the same small DynamoDB, S3, SQS, and Secrets Manager client interfaces used by in-memory tests. DynamoDB prefix reads use scan-based filtering because the current personal-demo tables are optimized for simple key-value access rather than secondary-index prefix queries.
+- Client interfaces are split by backing service: DynamoDB, S3 object storage, SQS queueing, and Secrets Manager reads. AWS wrappers normalize service-specific not-found and conditional-write behavior into package-level sentinels and boolean results.
+- `DynamoDBRepository` is one adapter facade for application ports, with implementation files separated across flight cache/lookup, position history, and usage budget responsibilities.
+- Cached flights, ident lookup rows, position rows, fetch-task idempotency rows, and monthly usage budget rows are serialized as application/domain data, not FlightAware transport DTOs. Flight and position TTL values are projected to top-level DynamoDB `ttl` attributes; reads treat `ttl <= now` as misses before DynamoDB asynchronous deletion runs.
+- Flight leases live as top-level DynamoDB attributes outside the serialized flight body. Lease acquisition updates only lease attributes and requires an unexpired cached row with no active lease. Fetched-flight writes, position writes, track commits, guarded history appends, and fallback lease checks require exact owner plus unexpired `fetchLeaseUntil > now`.
+- Summary refreshes and poll-schedule updates use conditional writes based on the observed flight body and exact lease state so stale readers cannot roll back metadata. Lease release conditionally removes only the lease attributes.
+- Ident lookup uses `lookupType` plus `lookupKey` prefix queries. Expired target flights are skipped as cache misses. Fetch-task idempotency reservations share the lookup table, carry DynamoDB TTL, and can be released if SQS send fails.
+- Due polling reads bounded pages from the `poll-due-index` GSI keyed by `pollShard` and `nextPollAt`, skips expired or no-longer-due rows, and continues paging until enough valid due flights are collected or the due range is exhausted.
+- Position history reads use DynamoDB range queries by `flightId` and `timestamp`; latest-position reads query descending and hide expired or uncommitted staged rows.
+- Transaction-sized track histories publish flight metadata and accepted positions in one lease-guarded transaction. Larger track histories write token-stamped position rows, keep those rows invisible until the flight row commits the token, preserve older committed tokens that still protect rows, clean tokens after success, and best-effort roll back only rows still owned by the stale worker's token on failure.
+- Usage budget state is scoped by environment/month, applies the default USD 4.00 soft stop threshold, records local FlightAware call estimates before upstream calls, and evaluates the post-update budget state before deciding whether to block the call. Account usage reconciliation updates the local month-to-date estimate only when the remote estimate is higher.
+- `S3GeoJSONRepository` stores planned route and actual track layers. Fetched artifacts use content-addressed versioned keys under `routes/{flightId}/` and `tracks/{flightId}/` so stale workers cannot overwrite the object currently referenced by cached flight state. Legacy direct layer writes still use stable `routes/{flightId}.json` and `tracks/{flightId}.json` keys for simple tests and setup paths.
+- `SQSFetchTaskQueue` combines process-local idempotency with optional DynamoDB-backed reservations. It rejects tasks without idempotency keys, releases both reservations when send fails, and lets reservations expire so dispatch can recover from lost, DLQ'd, or terminally skipped tasks.
+- `SQSDiagnosticQueue` sends safe fetch failure diagnostics only to the explicitly configured diagnostic queue.
+- `LoadFlightAwareAPIKey` resolves credentials from `FLIGHTAWARE_API_KEY` or `FLIGHTAWARE_API_KEY_SECRET_ARN`. Raw secrets are returned only to runtime transport wiring; logs record secret references and redacted values only.
+- `FlightAwareFetchAdapter` translates FlightAware client DTOs and typed errors into application-owned external DTOs and application boundary errors, including position metric fields used by domain normalization.
+- Architecture tests guard storage adapters from importing FlightAware transport DTOs directly.
 
-Lambda runtime wiring selects these AWS adapters in deployed environments and keeps memory adapters available for local tests.
+Lambda runtime wiring selects these adapters in deployed environments and memory clients outside Lambda or when `AIRPATH_RUNTIME_BACKEND=memory`.
