@@ -21,6 +21,11 @@ for dir in "${repo_root}"/infra/terraform/envs/*; do
   add_terraform_dir_if_config "${dir#"${repo_root}/"}"
 done
 
+for dir in "${repo_root}"/infra/terraform/modules/*; do
+  [[ -d "${dir}" ]] || continue
+  add_terraform_dir_if_config "${dir#"${repo_root}/"}"
+done
+
 if [[ "${#terraform_dirs[@]}" -eq 0 ]]; then
   echo "No Terraform root directories found" >&2
   exit 1

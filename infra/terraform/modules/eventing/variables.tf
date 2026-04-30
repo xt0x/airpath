@@ -39,6 +39,17 @@ variable "fetch_task_max_receive_count" {
   }
 }
 
+variable "fetch_task_visibility_timeout_seconds" {
+  description = "Fetch task SQS visibility timeout in seconds. Set this above the fetcher Lambda timeout."
+  type        = number
+  default     = 60
+
+  validation {
+    condition     = var.fetch_task_visibility_timeout_seconds >= 1 && var.fetch_task_visibility_timeout_seconds <= 43200 && floor(var.fetch_task_visibility_timeout_seconds) == var.fetch_task_visibility_timeout_seconds
+    error_message = "fetch_task_visibility_timeout_seconds must be an integer between 1 and 43200."
+  }
+}
+
 variable "tags" {
   description = "Tags applied to eventing resources."
   type        = map(string)

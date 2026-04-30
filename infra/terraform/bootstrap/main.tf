@@ -13,6 +13,11 @@ locals {
     "airpath-${var.bootstrap_environment}-github-ci-plan"
   )
 
+  github_oidc_subjects = coalesce(
+    var.github_oidc_subjects,
+    ["repo:${var.github_repository}:ref:refs/heads/main"]
+  )
+
   state_object_keys = [
     for environment in local.allowed_environments : "${environment}/terraform.tfstate"
   ]
@@ -44,9 +49,9 @@ data "aws_iam_policy_document" "github_ci_plan_assume_role" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:*"]
+      values   = local.github_oidc_subjects
     }
   }
 }
@@ -209,7 +214,19 @@ data "aws_iam_policy_document" "terraform_state_access" {
   }
 
   statement {
-    sid = "ReadWriteTerraformStateAndLocks"
+    sid = "ReadTerraformStateObjects"
+
+    actions = [
+      "s3:GetObject",
+    ]
+
+    resources = [
+      for key in local.state_object_keys : "${aws_s3_bucket.terraform_state.arn}/${key}"
+    ]
+  }
+
+  statement {
+    sid = "ReadWriteTerraformLockObjects"
 
     actions = [
       "s3:DeleteObject",
@@ -218,7 +235,7 @@ data "aws_iam_policy_document" "terraform_state_access" {
     ]
 
     resources = [
-      for key in concat(local.state_object_keys, local.lock_object_keys) : "${aws_s3_bucket.terraform_state.arn}/${key}"
+      for key in local.lock_object_keys : "${aws_s3_bucket.terraform_state.arn}/${key}"
     ]
   }
 
@@ -276,8 +293,25 @@ data "aws_iam_policy_document" "terraform_plan_read" {
       "logs:Describe*",
       "logs:Get*",
       "logs:List*",
-      "s3:Get*",
-      "s3:List*",
+      "s3:GetAccelerateConfiguration",
+      "s3:GetBucketAcl",
+      "s3:GetBucketCORS",
+      "s3:GetBucketLocation",
+      "s3:GetBucketLogging",
+      "s3:GetBucketNotification",
+      "s3:GetBucketObjectLockConfiguration",
+      "s3:GetBucketOwnershipControls",
+      "s3:GetBucketPolicy",
+      "s3:GetBucketPolicyStatus",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketRequestPayment",
+      "s3:GetBucketTagging",
+      "s3:GetBucketVersioning",
+      "s3:GetBucketWebsite",
+      "s3:GetEncryptionConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:GetReplicationConfiguration",
+      "s3:ListAllMyBuckets",
       "secretsmanager:DescribeSecret",
       "secretsmanager:ListSecrets",
       "sqs:Get*",

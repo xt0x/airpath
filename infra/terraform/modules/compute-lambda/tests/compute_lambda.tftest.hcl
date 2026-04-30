@@ -40,6 +40,14 @@ run "plans_lambda_runtime_and_environment_contract" {
   }
 
   assert {
+    condition = (
+      aws_cloudwatch_log_group.this.name == "/aws/lambda/airpath-test-api" &&
+      aws_cloudwatch_log_group.this.retention_in_days == 30
+    )
+    error_message = "Lambda log groups must be managed with a bounded default retention period."
+  }
+
+  assert {
     condition     = aws_lambda_function.this.environment[0].variables.APP_ENV == "test"
     error_message = "Lambda environment variables must be passed through unchanged."
   }
@@ -72,10 +80,11 @@ run "plans_overrides_and_optional_inline_policy" {
   command = plan
 
   variables {
-    function_name   = "airpath-test-fetcher"
-    artifact_path   = "./missing-bootstrap.zip"
-    memory_size     = 256
-    timeout_seconds = 30
+    function_name      = "airpath-test-fetcher"
+    artifact_path      = "./missing-bootstrap.zip"
+    memory_size        = 256
+    timeout_seconds    = 30
+    log_retention_days = 14
     policy_json = jsonencode({
       Version = "2012-10-17"
       Statement = [
@@ -94,6 +103,11 @@ run "plans_overrides_and_optional_inline_policy" {
       aws_lambda_function.this.timeout == 30
     )
     error_message = "Lambda memory and timeout must follow module inputs."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.this.retention_in_days == 14
+    error_message = "Lambda log retention must follow the module input."
   }
 
   assert {

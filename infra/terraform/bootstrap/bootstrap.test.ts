@@ -39,17 +39,33 @@ describe("Terraform bootstrap contract", () => {
     const keyPolicy = dataBlock(main, "aws_iam_policy_document", "terraform_state_key");
     expect(bodyIncludes(keyPolicy, "kms:Decrypt")).toBe(true);
     expect(bodyIncludes(keyPolicy, "kms:GenerateDataKey")).toBe(true);
-    expect(bodyIncludes(statePolicy, "s3:GetObject")).toBe(true);
-    expect(bodyIncludes(statePolicy, "s3:PutObject")).toBe(true);
-    expect(bodyIncludes(statePolicy, "s3:DeleteObject")).toBe(true);
+    expect(bodyIncludes(statePolicy, 'sid = "ReadTerraformStateObjects"')).toBe(true);
+    expect(bodyIncludes(statePolicy, 'sid = "ReadWriteTerraformLockObjects"')).toBe(true);
+    expect(bodyIncludes(statePolicy, "for key in local.state_object_keys")).toBe(true);
+    expect(bodyIncludes(statePolicy, "for key in local.lock_object_keys")).toBe(true);
   });
 
   it("defines a GitHub OIDC provider and CI plan role without static AWS keys", () => {
     const oidc = resourceBlock(main, "aws_iam_openid_connect_provider", "github");
+    const assumeRolePolicy = dataBlock(
+      main,
+      "aws_iam_policy_document",
+      "github_ci_plan_assume_role",
+    );
     expect(resourceBlock(main, "aws_iam_role", "github_ci_plan")).toBeDefined();
     const policy = dataBlock(main, "aws_iam_policy_document", "terraform_plan_read");
     expect(bodyIncludes(oidc, "token.actions.githubusercontent.com")).toBe(true);
+    expect(bodyIncludes(assumeRolePolicy, "local.github_oidc_subjects")).toBe(true);
+    expect(bodyIncludes(assumeRolePolicy, 'test     = "StringEquals"')).toBe(true);
+    expect(bodyIncludes(assumeRolePolicy, "repo:${var.github_repository}:*")).toBe(false);
     expect(bodyIncludes(policy, "sts:GetCallerIdentity")).toBe(true);
+    expect(bodyIncludes(policy, "s3:GetBucketPolicy")).toBe(true);
+    expect(bodyIncludes(policy, "s3:GetEncryptionConfiguration")).toBe(true);
+    expect(bodyIncludes(policy, "s3:GetObject")).toBe(false);
+    expect(bodyIncludes(policy, "s3:Get*")).toBe(false);
+    expect(bodyIncludes(policy, "s3:ListBucket")).toBe(false);
+    expect(bodyIncludes(policy, "s3:ListBucketVersions")).toBe(false);
+    expect(bodyIncludes(policy, "s3:ListAllMyBuckets")).toBe(true);
     expect(main).toContain("sts:AssumeRoleWithWebIdentity");
     expect(main).not.toMatch(/aws_access_key_id|aws_secret_access_key/i);
   });
@@ -64,6 +80,10 @@ describe("Terraform bootstrap contract", () => {
     expect(
       bodyIncludes(variableBlock(variables, "github_repository"), 'regex("^[^/]+/[^/]+$"'),
     ).toBe(true);
+    expect(bodyIncludes(variableBlock(variables, "github_oidc_subjects"), "pull_request")).toBe(
+      true,
+    );
+    expect(bodyIncludes(localsBlock(main), "refs/heads/main")).toBe(true);
     expect(outputBlock(outputs, "backend_config")).toBeDefined();
   });
 });

@@ -36,3 +36,17 @@ run "rejects_timeout_seconds_below_lambda_minimum" {
     var.timeout_seconds,
   ]
 }
+
+run "rejects_unsupported_log_retention_days" {
+  command = plan
+
+  variables {
+    function_name      = "airpath-test-api"
+    artifact_path      = "./missing-bootstrap.zip"
+    log_retention_days = 2
+  }
+
+  expect_failures = [
+    var.log_retention_days,
+  ]
+}

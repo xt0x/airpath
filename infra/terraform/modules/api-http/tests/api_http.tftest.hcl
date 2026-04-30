@@ -17,6 +17,13 @@ override_resource {
   }
 }
 
+override_resource {
+  target = aws_cloudwatch_log_group.access
+  values = {
+    arn = "arn:aws:logs:us-east-1:123456789012:log-group:/aws/apigateway/airpath-test-api"
+  }
+}
+
 run "plans_http_api_proxy_contract" {
   command = plan
 
@@ -57,10 +64,22 @@ run "plans_http_api_proxy_contract" {
     condition = (
       aws_apigatewayv2_stage.this.name == "$default" &&
       aws_apigatewayv2_stage.this.auto_deploy == true &&
+      length(aws_apigatewayv2_stage.this.access_log_settings) == 1 &&
+      jsondecode(aws_apigatewayv2_stage.this.access_log_settings[0].format).requestId == "$context.requestId" &&
+      aws_apigatewayv2_stage.this.default_route_settings[0].throttling_burst_limit == 20 &&
+      aws_apigatewayv2_stage.this.default_route_settings[0].throttling_rate_limit == 10 &&
       aws_lambda_permission.allow_http_api.function_name == "airpath-test-api" &&
       aws_lambda_permission.allow_http_api.principal == "apigateway.amazonaws.com"
     )
-    error_message = "HTTP API stage and Lambda invoke permission must match the API contract."
+    error_message = "HTTP API stage, logging, throttling, and Lambda invoke permission must match the API contract."
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_log_group.access.name == "/aws/apigateway/airpath-test-api" &&
+      aws_cloudwatch_log_group.access.retention_in_days == 30
+    )
+    error_message = "HTTP API access logs must use a bounded default retention period."
   }
 }
 
@@ -71,6 +90,8 @@ run "wires_route_target_after_mock_apply" {
     name                     = "airpath-test-api"
     api_lambda_invoke_arn    = "arn:aws:lambda:us-east-1:123456789012:function:airpath-test-api:live"
     api_lambda_function_name = "airpath-test-api"
+    throttling_burst_limit   = 7
+    throttling_rate_limit    = 3
   }
 
   assert {
@@ -81,5 +102,13 @@ run "wires_route_target_after_mock_apply" {
   assert {
     condition     = aws_lambda_permission.allow_http_api.source_arn == "${aws_apigatewayv2_api.this.execution_arn}/*/*/v1/*"
     error_message = "HTTP API Lambda permission must scope invocation to /v1 routes."
+  }
+
+  assert {
+    condition = (
+      aws_apigatewayv2_stage.this.default_route_settings[0].throttling_burst_limit == 7 &&
+      aws_apigatewayv2_stage.this.default_route_settings[0].throttling_rate_limit == 3
+    )
+    error_message = "HTTP API throttling must follow module inputs."
   }
 }

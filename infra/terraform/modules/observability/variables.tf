@@ -8,15 +8,28 @@ variable "environment" {
   type        = string
 }
 
+variable "aws_region" {
+  description = "AWS region used by CloudWatch dashboard metric widgets."
+  type        = string
+}
+
 variable "metric_namespace" {
   description = "CloudWatch namespace for Airpath FlightAware guard metrics."
   type        = string
   default     = "Airpath/FlightAware"
 }
 
-variable "lambda_function_names" {
-  description = "Lambda function names monitored for errors."
-  type        = list(string)
+variable "lambda_timeout_seconds_by_function" {
+  description = "Lambda timeout seconds keyed by function name for error and timeout alarms."
+  type        = map(number)
+
+  validation {
+    condition = alltrue([
+      for timeout_seconds in values(var.lambda_timeout_seconds_by_function) :
+      timeout_seconds >= 1 && timeout_seconds <= 900 && floor(timeout_seconds) == timeout_seconds
+    ])
+    error_message = "lambda_timeout_seconds_by_function values must be integer Lambda timeouts between 1 and 900 seconds."
+  }
 }
 
 variable "fetch_task_dlq_name" {

@@ -14,6 +14,13 @@ locals {
   flightaware_real_calls_enabled    = var.allow_real_flightaware_calls ? "true" : "false"
   flightaware_fetch_enabled         = var.allow_real_flightaware_calls ? "true" : "false"
   flightaware_fetch_disabled_reason = var.allow_real_flightaware_calls ? "" : var.flightaware_fetch_disabled_reason
+
+  api_lambda_timeout_seconds        = 10
+  fetcher_lambda_timeout_seconds    = 30
+  dispatcher_lambda_timeout_seconds = 10
+
+  fetch_task_visibility_timeout_buffer_seconds = 30
+  fetch_task_visibility_timeout_seconds        = local.fetcher_lambda_timeout_seconds + local.fetch_task_visibility_timeout_buffer_seconds
 }
 
 data "aws_iam_policy_document" "dispatcher_data_access" {
@@ -147,7 +154,7 @@ module "api_lambda" {
   description     = "Airpath dev Go API Lambda."
   artifact_path   = var.api_lambda_artifact_path
   memory_size     = 128
-  timeout_seconds = 10
+  timeout_seconds = local.api_lambda_timeout_seconds
   policy_json     = data.aws_iam_policy_document.api_data_access.json
 
   environment_variables = {
@@ -175,7 +182,7 @@ module "fetcher_lambda" {
   description     = "Airpath dev SQS-triggered fetcher Lambda."
   artifact_path   = var.fetcher_lambda_artifact_path
   memory_size     = 128
-  timeout_seconds = 30
+  timeout_seconds = local.fetcher_lambda_timeout_seconds
   policy_json     = data.aws_iam_policy_document.fetcher_data_access.json
 
   environment_variables = {
@@ -204,7 +211,7 @@ module "dispatcher_lambda" {
   description     = "Airpath dev due-flight dispatcher Lambda."
   artifact_path   = var.dispatcher_lambda_artifact_path
   memory_size     = 128
-  timeout_seconds = 10
+  timeout_seconds = local.dispatcher_lambda_timeout_seconds
   policy_json     = data.aws_iam_policy_document.dispatcher_data_access.json
 
   environment_variables = {
@@ -226,14 +233,15 @@ module "dispatcher_lambda" {
 module "fetch_task_queue" {
   source = "../../modules/eventing"
 
-  name_prefix                     = local.name_prefix
-  fetcher_lambda_arn              = module.fetcher_lambda.function_arn
-  fetcher_lambda_role_name        = module.fetcher_lambda.role_name
-  dispatcher_lambda_arn           = module.dispatcher_lambda.function_arn
-  dispatcher_lambda_function_name = module.dispatcher_lambda.function_name
-  dispatcher_schedule_expression  = var.dispatcher_schedule_expression
-  fetch_task_max_receive_count    = var.fetch_task_max_receive_count
-  tags                            = local.common_tags
+  name_prefix                           = local.name_prefix
+  fetcher_lambda_arn                    = module.fetcher_lambda.function_arn
+  fetcher_lambda_role_name              = module.fetcher_lambda.role_name
+  dispatcher_lambda_arn                 = module.dispatcher_lambda.function_arn
+  dispatcher_lambda_function_name       = module.dispatcher_lambda.function_name
+  dispatcher_schedule_expression        = var.dispatcher_schedule_expression
+  fetch_task_max_receive_count          = var.fetch_task_max_receive_count
+  fetch_task_visibility_timeout_seconds = local.fetch_task_visibility_timeout_seconds
+  tags                                  = local.common_tags
 }
 
 module "http_api" {
@@ -251,12 +259,13 @@ module "observability" {
 
   name_prefix = local.name_prefix
   environment = var.environment
+  aws_region  = var.aws_region
 
-  lambda_function_names = [
-    module.api_lambda.function_name,
-    module.fetcher_lambda.function_name,
-    module.dispatcher_lambda.function_name,
-  ]
+  lambda_timeout_seconds_by_function = {
+    (module.api_lambda.function_name)        = local.api_lambda_timeout_seconds
+    (module.fetcher_lambda.function_name)    = local.fetcher_lambda_timeout_seconds
+    (module.dispatcher_lambda.function_name) = local.dispatcher_lambda_timeout_seconds
+  }
 
   fetch_task_queue_name = module.fetch_task_queue.fetch_task_queue_name
   fetch_task_dlq_name   = module.fetch_task_queue.fetch_task_dlq_name

@@ -40,10 +40,18 @@ describe("Terraform security policy scanner contract", () => {
     expect(makefile).toContain("bash scripts/ci/terraform-policy.sh");
     expect(makefile).toMatch(/terraform-check:[\s\S]*\$\(MAKE\) terraform-policy/);
     expect(workflow).toContain("astral-sh/setup-uv");
-    expect(workflow).toContain("make terraform-policy");
+    expect(workflow).toContain("make terraform-check");
     expect(checkovConfig).toContain("CKV_AWS_19");
     expect(checkovConfig).toContain("CKV_AWS_27");
     expect(checkovConfig).toContain("CKV2_AWS_6");
+  });
+
+  it("runs TFLint for reusable Terraform modules as well as environment roots", () => {
+    const lintScript = readRepoFile("scripts/ci/terraform-lint.sh");
+
+    expect(lintScript).toContain("/infra/terraform/modules/*");
+    expect(lintScript).toContain("add_terraform_dir_if_config");
+    expect(lintScript).toContain("--chdir");
   });
 
   it("encrypts S3 buckets and SQS queues that hold Terraform-managed application data", () => {
@@ -92,5 +100,22 @@ describe("Terraform security policy scanner contract", () => {
       "infra/terraform/bootstrap/main.tf:aws_iam_policy_document.terraform_state_key",
       "infra/terraform/bootstrap/main.tf:aws_iam_policy_document.terraform_plan_read",
     ]);
+  });
+
+  it("keeps the CI plan discovery policy from reading S3 object contents", () => {
+    const bootstrap = readTerraformFile("bootstrap/main.tf");
+    const planPolicy = hclBlocks(bootstrap, "data").find(
+      (block) =>
+        block.labels[0] === "aws_iam_policy_document" && block.labels[1] === "terraform_plan_read",
+    );
+
+    expect(planPolicy).toBeDefined();
+    expect(bodyIncludes(planPolicy!, "s3:GetObject")).toBe(false);
+    expect(bodyIncludes(planPolicy!, "s3:Get*")).toBe(false);
+    expect(bodyIncludes(planPolicy!, "s3:ListBucket")).toBe(false);
+    expect(bodyIncludes(planPolicy!, "s3:ListBucketVersions")).toBe(false);
+    expect(bodyIncludes(planPolicy!, "s3:ListAllMyBuckets")).toBe(true);
+    expect(bodyIncludes(planPolicy!, "s3:GetBucketPolicy")).toBe(true);
+    expect(bodyIncludes(planPolicy!, "s3:GetEncryptionConfiguration")).toBe(true);
   });
 });

@@ -8,7 +8,7 @@ resource "aws_sqs_queue" "fetch_task_dlq" {
 
 resource "aws_sqs_queue" "fetch_task" {
   name                       = "${var.name_prefix}-fetch-task"
-  visibility_timeout_seconds = 60
+  visibility_timeout_seconds = var.fetch_task_visibility_timeout_seconds
   message_retention_seconds  = 1209600
   sqs_managed_sse_enabled    = true
 
@@ -26,6 +26,8 @@ resource "aws_lambda_event_source_mapping" "fetcher" {
   batch_size              = 1
   function_response_types = ["ReportBatchItemFailures"]
   enabled                 = true
+
+  depends_on = [aws_iam_role_policy.fetcher_queue_consume]
 }
 
 resource "aws_cloudwatch_event_rule" "dispatcher" {
