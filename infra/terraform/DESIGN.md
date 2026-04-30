@@ -5,7 +5,7 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 ## Responsibilities
 
 - `bootstrap` creates the shared Terraform state backend, lockfile access, encryption key, GitHub OIDC provider, and CI plan role.
-- `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime and carries native validation-failure tests for environment scoping, artifact retention, and fetch-task DLQ thresholds.
+- `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime and carries native validation-failure tests for environment scoping, artifact retention, fetch-task DLQ thresholds, and IAM policy semantics.
 - `envs/stg` and `envs/prod` validate provider, backend, variable, and output shape only. They carry native Terraform tests for environment defaults and invalid environment rejection, plus Vitest contract tests that keep resources, data sources, and modules absent until a shared environment module or explicit root resource graph is added.
 - `modules/api-http` owns HTTP API v2 routing to the API Lambda.
 - `modules/compute-lambda` owns Lambda execution roles, basic logging, inline least-privilege policy attachment, runtime settings, artifact references, and environment variables.
@@ -32,6 +32,8 @@ IAM policies follow those boundaries:
 - API can read and update cache/usage state, read/write GeoJSON artifacts, enqueue fetch tasks, and inspect the configured secret reference without reading the secret value.
 - Fetcher can consume fetch task batches, update DynamoDB lease/cache/position/usage state including transactional writes, write GeoJSON artifacts, read the configured FlightAware secret value, and send safe diagnostics to the DLQ-backed diagnostic queue.
 - Dispatcher can query due polling state through the flight table GSI, update poll state, reserve or release fetch task idempotency records in the lookup table, read usage budget state, and send fetch tasks to SQS.
+
+Native dev-root Terraform tests decode the rendered IAM policy JSON to enforce those boundaries semantically. They keep secret value access fetcher-only, prevent dispatcher S3 and Secrets Manager permissions, and verify SQS/DynamoDB resource scopes against the module outputs that compose the dev environment.
 
 ## Secret Handling
 

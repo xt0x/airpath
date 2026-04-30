@@ -16,6 +16,8 @@ Reusable modules declare their own Terraform and AWS provider requirements so th
 
 The stg and prod roots also carry native `terraform test` coverage under `tests/` to prove their default environment output and reject cross-environment variable values. Vitest HCL contract tests keep their placeholder shape explicit: provider, backend, variables, and outputs only, with no resources, data sources, or modules until deployable staging or production infrastructure is intentionally introduced.
 
+The dev root carries native IAM policy semantic tests that decode Terraform-rendered policy JSON. These tests guard service boundaries without changing the services contract: API must not read secret values, only the fetcher can read the FlightAware secret value, dispatcher has no S3 or Secrets Manager permissions, and SQS/DynamoDB permissions remain scoped to module outputs.
+
 ## Naming And Secrets
 
 Terraform resource names follow the root naming policy: `airpath-${environment}` for the resource prefix and `airpath-${environment}-${table-suffix}` for DynamoDB tables. Environment directories are scoped to exactly one environment and validate their own `environment` variable.
@@ -67,4 +69,4 @@ The dev root owns the deployed runtime contract for the Go services:
 
 The dispatcher uses `DISPATCHER_ASSUME_ACTIVE_VIEWER=true` in dev so the personal demo can enqueue due polling tasks without a separate viewer activity signal. Staging and production should revisit that input when they introduce a real activity source.
 
-The dev root also validates environment-specific deployment inputs before planning resources. It rejects non-dev environment names, non-positive GeoJSON artifact retention, and non-positive fetch-task DLQ receive thresholds. Module tests cover the same reusable contracts where the input belongs to a module.
+The dev root also validates environment-specific deployment inputs before planning resources. It rejects non-dev environment names, non-positive GeoJSON artifact retention, and non-positive fetch-task DLQ receive thresholds. Its native IAM policy semantic tests decode Terraform-rendered policy JSON to keep API, fetcher, and dispatcher permissions aligned with their runtime responsibilities. Module tests cover the same reusable contracts where the input belongs to a module.
