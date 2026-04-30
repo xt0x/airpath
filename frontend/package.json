@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build:deps": "pnpm --filter @airpath/shared-types build",
+    "build:deps": "pnpm --filter @airpath/shared-types build && pnpm --filter @airpath/map-rendering build",
     "build": "pnpm run build:deps && next build",
     "dev": "next dev",
     "lint": "pnpm run typecheck",

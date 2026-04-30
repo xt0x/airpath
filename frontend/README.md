@@ -16,6 +16,11 @@ Next.js-specific configuration, dependencies, and environment examples live at t
 for same-origin `/v1` routes, or set an origin such as `https://api.example.com`.
 The shared API route builders already include the `/v1` prefix.
 
+The frontend imports workspace packages through their package exports. Its
+verification and build commands run `build:deps` first, which generates the
+`@airpath/shared-types` and `@airpath/map-rendering` `dist` artifacts needed by
+TypeScript on clean CI workers.
+
 ## Commands
 
 Run these commands from `frontend`:

@@ -27,7 +27,7 @@ Flight feature styles use `flight-dashboard`-prefixed class selectors rather tha
 
 The API client builds all `/v1` endpoint paths through shared route builders from `@airpath/shared-types`. `NEXT_PUBLIC_API_BASE_URL` is treated only as an optional origin/base URL, so frontend environment configuration cannot duplicate the API prefix. Successful JSON responses are validated at the client boundary before dashboard state consumes them; malformed upstream payloads become typed retryable API errors instead of unchecked TypeScript casts.
 
-Workspace package imports resolve through package `exports` and built `dist` artifacts during frontend builds. The frontend `tsconfig` must not alias `@airpath/shared-types` or `@airpath/map-rendering` directly to package `src` files because those sources use NodeNext `.js` import specifiers that Turbopack does not resolve as TypeScript source paths.
+Workspace package imports resolve through package `exports` and built `dist` artifacts during frontend builds. The frontend `build:deps` script builds both `@airpath/shared-types` and `@airpath/map-rendering` before typecheck or production build, so clean CI workers have the declarations that package exports reference. The frontend `tsconfig` must not alias `@airpath/shared-types` or `@airpath/map-rendering` directly to package `src` files because those sources use NodeNext `.js` import specifiers that Turbopack does not resolve as TypeScript source paths.
 
 ## Personal Demo Notice
 

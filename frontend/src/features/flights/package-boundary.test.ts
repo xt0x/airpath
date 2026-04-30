@@ -17,6 +17,12 @@ describe("frontend package boundaries", () => {
     expect(frontendTsconfig.compilerOptions.paths).not.toHaveProperty("@airpath/map-rendering");
   });
 
+  it("builds imported workspace package artifacts before frontend verification", () => {
+    expect(frontendPackage.scripts["build:deps"]).toContain(
+      "pnpm --filter @airpath/map-rendering build",
+    );
+  });
+
   it("keeps flight feature styles scoped and dashboard internals out of global entrypoints", () => {
     const globals = readFileSync("src/app/globals.css", "utf8");
     const featureStyles = readFileSync("src/features/flights/flight-dashboard.css", "utf8");
