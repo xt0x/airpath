@@ -26,6 +26,23 @@ variable "github_repository" {
   }
 }
 
+variable "github_oidc_subjects" {
+  description = "Explicit GitHub OIDC subject claims allowed to assume the CI plan role."
+  type        = list(string)
+  default     = null
+
+  validation {
+    condition = var.github_oidc_subjects == null || (
+      length(var.github_oidc_subjects) > 0 &&
+      alltrue([
+        for subject in var.github_oidc_subjects :
+        can(regex("^repo:[^/]+/[^:]+:(ref:refs/heads/.+|pull_request|environment:.+)$", subject))
+      ])
+    )
+    error_message = "github_oidc_subjects must contain repo-scoped branch, pull_request, or environment subjects."
+  }
+}
+
 variable "github_oidc_thumbprints" {
   description = "SHA-1 thumbprints for the GitHub Actions OIDC provider certificate chain."
   type        = list(string)

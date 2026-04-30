@@ -7,11 +7,13 @@ import {
   outputBlock,
   readTerraformFile,
   resourceBlock,
+  unlabeledHclBlocks,
   variableBlock,
 } from "../../test-support/hcl";
 
 describe("dev infrastructure contract", () => {
   const devMain = readTerraformFile("envs/dev/main.tf");
+  const devBackend = readTerraformFile("envs/dev/backend.tf");
   const devVariables = readTerraformFile("envs/dev/variables.tf");
   const devOutputs = readTerraformFile("envs/dev/outputs.tf");
   const httpApiMain = readTerraformFile("modules/api-http/main.tf");
@@ -21,6 +23,13 @@ describe("dev infrastructure contract", () => {
   const storageMain = readTerraformFile("modules/storage-s3/main.tf");
   const secretsMain = readTerraformFile("modules/secrets/main.tf");
   const observabilityMain = readTerraformFile("modules/observability/main.tf");
+
+  it("declares the shared S3 backend with dev-specific config supplied at init", () => {
+    const terraformBlocks = unlabeledHclBlocks(devBackend, "terraform");
+
+    expect(terraformBlocks).toHaveLength(1);
+    expect(bodyIncludes(terraformBlocks[0], 'backend "s3" {}')).toBe(true);
+  });
 
   it("routes /v1/* HTTP API traffic to the Go API Lambda integration", () => {
     expect(moduleBlock(devMain, "http_api")).toBeDefined();

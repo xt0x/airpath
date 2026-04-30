@@ -9,6 +9,7 @@ import {
   hclBlocks,
   outputBlock,
   readTerraformFile,
+  unlabeledHclBlocks,
   variableBlock,
 } from "../test-support/hcl";
 
@@ -49,9 +50,11 @@ describe.each(roots)("$description Terraform root contract", ({ name }) => {
     expect(providers).toContain("region = var.aws_region");
   });
 
-  it("keeps backend wiring as an explicit bootstrap placeholder", () => {
-    expect(backend).toContain("Backend is wired after L6 bootstrap creates state resources.");
-    expect(backend).not.toMatch(/\bbackend\s+"/);
+  it("declares the shared S3 backend with environment-specific config supplied at init", () => {
+    const terraformBlocks = unlabeledHclBlocks(backend, "terraform");
+
+    expect(terraformBlocks).toHaveLength(1);
+    expect(bodyIncludes(terraformBlocks[0], 'backend "s3" {}')).toBe(true);
   });
 
   it("exports only the managed environment name", () => {
