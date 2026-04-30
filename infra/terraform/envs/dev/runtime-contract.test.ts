@@ -79,7 +79,11 @@ describe("services runtime contract", () => {
   });
 
   it("allows dispatcher to query due poll state, reserve fetch tasks, and enqueue to the fetch task queue", () => {
-    const dispatcherPolicy = dataBlock(devMain, "aws_iam_policy_document", "dispatcher_data_access");
+    const dispatcherPolicy = dataBlock(
+      devMain,
+      "aws_iam_policy_document",
+      "dispatcher_data_access",
+    );
     for (const action of [
       "dynamodb:DeleteItem",
       "dynamodb:GetItem",
@@ -95,9 +99,7 @@ describe("services runtime contract", () => {
     expect(bodyIncludes(dispatcherPolicy, "module.data_tables.table_arns.flight_lookup")).toBe(
       true,
     );
-    expect(bodyIncludes(dispatcherPolicy, "module.data_tables.table_arns.usage_budget")).toBe(
-      true,
-    );
+    expect(bodyIncludes(dispatcherPolicy, "module.data_tables.table_arns.usage_budget")).toBe(true);
     expect(bodyIncludes(dispatcherPolicy, "module.fetch_task_queue.fetch_task_queue_arn")).toBe(
       true,
     );
@@ -127,12 +129,8 @@ describe("services runtime contract", () => {
       expect(bodyIncludes(fetcherPolicy, action), `fetcher action ${action}`).toBe(true);
     }
     expect(bodyIncludes(fetcherPolicy, "values(module.data_tables.table_arns)")).toBe(true);
-    expect(bodyIncludes(fetcherPolicy, "${module.geojson_storage.bucket_arn}/routes/*")).toBe(
-      true,
-    );
-    expect(bodyIncludes(fetcherPolicy, "${module.geojson_storage.bucket_arn}/tracks/*")).toBe(
-      true,
-    );
+    expect(bodyIncludes(fetcherPolicy, "${module.geojson_storage.bucket_arn}/routes/*")).toBe(true);
+    expect(bodyIncludes(fetcherPolicy, "${module.geojson_storage.bucket_arn}/tracks/*")).toBe(true);
     expect(
       bodyIncludes(fetcherPolicy, "module.secret_references.flightaware_api_key_secret_arn"),
     ).toBe(true);
