@@ -9,7 +9,7 @@ import {
   readRepoFile,
   readTerraformFile,
   resourceBlock,
-} from "./test-support/hcl";
+} from "../test-support/hcl";
 
 const terraformRoot = "infra/terraform";
 
