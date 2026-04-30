@@ -19,6 +19,8 @@ Each reusable module declares its own Terraform and AWS provider requirements an
 
 The staging and production roots are intentionally non-deployable placeholders. Their tests are contract guards: they prove the root owns exactly one environment name, retain backend wiring as a bootstrap placeholder, expose only the `environment` output, and fail if deployable Terraform blocks are added without updating the environment design.
 
+The dev root includes a sandbox apply/destroy integration test for manual, nightly, or release-before-deploy validation. It is explicitly opt-in because it creates live AWS resources. The test uses temporary local Terraform state, applies the dev root in a sandbox AWS account, verifies only safe output metadata for Lambda, HTTP API, SQS, DynamoDB, S3, CloudWatch, and Secrets Manager references, checks Terraform state for the expected live resource types, and then destroys the same state. It does not introduce a service-side contract change: runtime code still receives the existing environment variables and secret references, and raw secret values remain outside Terraform.
+
 ## Runtime Contract
 
 The dev root mirrors the runtime contract consumed by `services/internal/runtimewiring` and the Lambda entrypoints.

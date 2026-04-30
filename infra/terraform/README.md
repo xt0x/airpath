@@ -55,6 +55,19 @@ make terraform-check
 
 `terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes the dev root, the stg/prod placeholder roots, and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
 
+### Sandbox Apply/Destroy Integration Test
+
+The dev root also has an opt-in sandbox AWS apply/destroy integration test:
+
+```sh
+make lambda-artifacts
+AIRPATH_TERRAFORM_SANDBOX_APPLY_DESTROY=1 pnpm exec vitest run infra/terraform/envs/dev/sandbox-apply-destroy.test.ts
+```
+
+This test is skipped by default and is intended for manual, nightly, or release-before-deploy validation in a disposable sandbox AWS account. It runs `terraform apply`, checks safe Terraform outputs for Lambda, HTTP API, SQS, DynamoDB, S3, CloudWatch, and Secrets Manager references, checks `terraform state list` for the expected live resource types, then runs `terraform destroy` against the same temporary local state path.
+
+Use `AIRPATH_TERRAFORM_SANDBOX_TFVARS=/absolute/path/to/terraform.tfvars` when the sandbox run needs non-default dev inputs. Do not provide raw API keys through Terraform variables, tfvars files, outputs, or state. The FlightAware API key value must remain managed outside Terraform; Terraform receives only the Secrets Manager secret name and emits only the secret ARN reference.
+
 ## Dev Personal Demo
 
 The `envs/dev` root deploys the personal demo environment. It is personal, non-commercial, and low-frequency by policy. Lambda artifacts are built outside Terraform with `make lambda-artifacts`, then referenced by the dev artifact path variables.
