@@ -25,6 +25,8 @@ describe("monitoring and operations contract", () => {
     expect(bodyIncludes(dashboard, "EstimatedSpendUSD")).toBe(true);
     expect(bodyIncludes(dashboard, "RateLimitedCount")).toBe(true);
     expect(bodyIncludes(dashboard, "BudgetStopCount")).toBe(true);
+    expect(bodyIncludes(dashboard, "region  = var.aws_region")).toBe(true);
+    expect(bodyIncludes(dashboard, "$${AWS::Region}")).toBe(false);
     expect(outputBlock(observabilityOutputs, "dashboard_name")).toBeDefined();
     expect(outputBlock(devOutputs, "cloudwatch_dashboard_name")).toBeDefined();
   });
@@ -40,6 +42,22 @@ describe("monitoring and operations contract", () => {
         /"Duration"/,
       ),
     ).toBe(true);
+    expect(
+      variableBlock(observabilityVariables, "lambda_timeout_seconds_by_function"),
+    ).toBeDefined();
+    expect(devMain).toContain("api_lambda_timeout_seconds        = 10");
+    expect(devMain).toContain("fetcher_lambda_timeout_seconds    = 30");
+    expect(devMain).toContain("dispatcher_lambda_timeout_seconds = 10");
+    expect(devMain).toContain("lambda_timeout_seconds_by_function = {");
+    expect(devMain).toContain(
+      "(module.api_lambda.function_name)        = local.api_lambda_timeout_seconds",
+    );
+    expect(devMain).toContain(
+      "(module.fetcher_lambda.function_name)    = local.fetcher_lambda_timeout_seconds",
+    );
+    expect(devMain).toContain(
+      "(module.dispatcher_lambda.function_name) = local.dispatcher_lambda_timeout_seconds",
+    );
     expect(
       resourceBlock(observabilityMain, "aws_cloudwatch_metric_alarm", "fetch_task_dlq_depth"),
     ).toBeDefined();

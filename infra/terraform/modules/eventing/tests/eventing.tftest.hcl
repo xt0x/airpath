@@ -49,8 +49,11 @@ run "plans_fetch_task_queue_and_dispatcher_schedule" {
   }
 
   assert {
-    condition     = aws_sqs_queue.fetch_task.name == "airpath-test-fetch-task"
-    error_message = "The fetch task queue must use the name prefix."
+    condition = (
+      aws_sqs_queue.fetch_task.name == "airpath-test-fetch-task" &&
+      aws_sqs_queue.fetch_task.visibility_timeout_seconds == 60
+    )
+    error_message = "The fetch task queue must use the name prefix and default visibility timeout."
   }
 
   assert {
@@ -98,21 +101,23 @@ run "uses_configured_fetch_task_max_receive_count" {
   command = apply
 
   variables {
-    name_prefix                     = "airpath-test"
-    fetcher_lambda_arn              = "arn:aws:lambda:us-east-1:123456789012:function:airpath-test-fetcher"
-    fetcher_lambda_role_name        = "airpath-test-fetcher-role"
-    dispatcher_lambda_arn           = "arn:aws:lambda:us-east-1:123456789012:function:airpath-test-dispatcher"
-    dispatcher_lambda_function_name = "airpath-test-dispatcher"
-    dispatcher_schedule_expression  = "rate(5 minutes)"
-    fetch_task_max_receive_count    = 5
+    name_prefix                           = "airpath-test"
+    fetcher_lambda_arn                    = "arn:aws:lambda:us-east-1:123456789012:function:airpath-test-fetcher"
+    fetcher_lambda_role_name              = "airpath-test-fetcher-role"
+    dispatcher_lambda_arn                 = "arn:aws:lambda:us-east-1:123456789012:function:airpath-test-dispatcher"
+    dispatcher_lambda_function_name       = "airpath-test-dispatcher"
+    dispatcher_schedule_expression        = "rate(5 minutes)"
+    fetch_task_max_receive_count          = 5
+    fetch_task_visibility_timeout_seconds = 90
   }
 
   assert {
     condition = (
       aws_lambda_event_source_mapping.fetcher.event_source_arn == aws_sqs_queue.fetch_task.arn &&
+      aws_sqs_queue.fetch_task.visibility_timeout_seconds == 90 &&
       jsondecode(aws_sqs_queue.fetch_task.redrive_policy).maxReceiveCount == 5
     )
-    error_message = "The fetch task mapping and DLQ threshold must follow queue configuration."
+    error_message = "The fetch task mapping, visibility timeout, and DLQ threshold must follow queue configuration."
   }
 
   assert {

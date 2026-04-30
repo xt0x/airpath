@@ -1,9 +1,9 @@
 aws_region  = "ap-northeast-1"
 environment = "dev"
 
-api_lambda_artifact_path        = "../../../artifacts/dev/api-lambda.zip"
-fetcher_lambda_artifact_path    = "../../../artifacts/dev/fetcher-lambda.zip"
-dispatcher_lambda_artifact_path = "../../../artifacts/dev/dispatcher-lambda.zip"
+api_lambda_artifact_path        = "../../../../artifacts/dev/api-lambda.zip"
+fetcher_lambda_artifact_path    = "../../../../artifacts/dev/fetcher-lambda.zip"
+dispatcher_lambda_artifact_path = "../../../../artifacts/dev/dispatcher-lambda.zip"
 dispatcher_schedule_expression = "rate(15 minutes)"
 
 geojson_artifact_retention_days = 30

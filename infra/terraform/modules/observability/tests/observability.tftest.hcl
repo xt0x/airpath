@@ -6,9 +6,13 @@ run "plans_flightaware_alarms_lambda_alarms_and_dashboard" {
   command = plan
 
   variables {
-    name_prefix               = "airpath-test"
-    environment               = "test"
-    lambda_function_names     = ["airpath-test-api", "airpath-test-fetcher"]
+    name_prefix = "airpath-test"
+    environment = "test"
+    aws_region  = "ap-northeast-1"
+    lambda_timeout_seconds_by_function = {
+      airpath-test-api     = 10
+      airpath-test-fetcher = 30
+    }
     fetch_task_dlq_name       = "airpath-test-fetch-task-dlq"
     fetch_task_queue_name     = "airpath-test-fetch-task"
     budget_soft_threshold_usd = 3.5
@@ -40,11 +44,15 @@ run "plans_flightaware_alarms_lambda_alarms_and_dashboard" {
   assert {
     condition = (
       aws_cloudwatch_metric_alarm.lambda_errors["airpath-test-api"].metric_name == "Errors" &&
+      aws_cloudwatch_metric_alarm.lambda_errors["airpath-test-api"].alarm_name == "airpath-test-api-errors" &&
       aws_cloudwatch_metric_alarm.lambda_errors["airpath-test-api"].dimensions.FunctionName == "airpath-test-api" &&
+      aws_cloudwatch_metric_alarm.lambda_timeouts["airpath-test-api"].metric_name == "Duration" &&
+      aws_cloudwatch_metric_alarm.lambda_timeouts["airpath-test-api"].alarm_name == "airpath-test-api-timeouts" &&
+      aws_cloudwatch_metric_alarm.lambda_timeouts["airpath-test-api"].threshold == 8000 &&
       aws_cloudwatch_metric_alarm.lambda_timeouts["airpath-test-fetcher"].metric_name == "Duration" &&
       aws_cloudwatch_metric_alarm.lambda_timeouts["airpath-test-fetcher"].threshold == 28000
     )
-    error_message = "Lambda error and timeout alarms must be created for every configured Lambda."
+    error_message = "Lambda error and timeout alarms must avoid duplicated prefixes and derive timeout thresholds from each function timeout."
   }
 
   assert {
@@ -60,8 +68,9 @@ run "plans_flightaware_alarms_lambda_alarms_and_dashboard" {
     condition = (
       aws_cloudwatch_dashboard.flightaware.dashboard_name == "airpath-test-flightaware-free-allowance" &&
       length(jsondecode(aws_cloudwatch_dashboard.flightaware.dashboard_body).widgets) == 4 &&
-      jsondecode(aws_cloudwatch_dashboard.flightaware.dashboard_body).widgets[0].properties.title == "FlightAware Calls And 429s"
+      jsondecode(aws_cloudwatch_dashboard.flightaware.dashboard_body).widgets[0].properties.title == "FlightAware Calls And 429s" &&
+      jsondecode(aws_cloudwatch_dashboard.flightaware.dashboard_body).widgets[0].properties.region == "ap-northeast-1"
     )
-    error_message = "The dashboard must keep the expected FlightAware operations widgets."
+    error_message = "The dashboard must keep the expected FlightAware operations widgets and concrete AWS region."
   }
 }

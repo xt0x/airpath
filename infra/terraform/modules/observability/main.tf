@@ -1,3 +1,10 @@
+locals {
+  lambda_alarm_name_suffixes = {
+    for function_name in keys(var.lambda_timeout_seconds_by_function) :
+    function_name => startswith(function_name, "${var.name_prefix}-") ? trimprefix(function_name, "${var.name_prefix}-") : function_name
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "flightaware_rate_limited" {
   alarm_name          = "${var.name_prefix}-flightaware-429"
   alarm_description   = "FlightAware rate limit guard emitted at least one 429 event."
@@ -79,10 +86,10 @@ resource "aws_cloudwatch_metric_alarm" "flightaware_budget_hard_stop" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  for_each = toset(var.lambda_function_names)
+  for_each = var.lambda_timeout_seconds_by_function
 
-  alarm_name          = "${var.name_prefix}-${each.value}-errors"
-  alarm_description   = "Lambda ${each.value} emitted at least one error."
+  alarm_name          = "${var.name_prefix}-${local.lambda_alarm_name_suffixes[each.key]}-errors"
+  alarm_description   = "Lambda ${each.key} emitted at least one error."
   namespace           = "AWS/Lambda"
   metric_name         = "Errors"
   statistic           = "Sum"
@@ -94,29 +101,29 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_actions       = var.alarm_actions
 
   dimensions = {
-    FunctionName = each.value
+    FunctionName = each.key
   }
 
   tags = var.tags
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_timeouts" {
-  for_each = toset(var.lambda_function_names)
+  for_each = var.lambda_timeout_seconds_by_function
 
-  alarm_name          = "${var.name_prefix}-${each.value}-timeouts"
-  alarm_description   = "Lambda ${each.value} duration is at or above the configured timeout window."
+  alarm_name          = "${var.name_prefix}-${local.lambda_alarm_name_suffixes[each.key]}-timeouts"
+  alarm_description   = "Lambda ${each.key} duration is near its configured timeout window."
   namespace           = "AWS/Lambda"
   metric_name         = "Duration"
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 1
-  threshold           = 28000
+  threshold           = max(each.value * 1000 - 2000, 1000)
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
   alarm_actions       = var.alarm_actions
 
   dimensions = {
-    FunctionName = each.value
+    FunctionName = each.key
   }
 
   tags = var.tags
@@ -173,7 +180,7 @@ resource "aws_cloudwatch_dashboard" "flightaware" {
         height = 6
         properties = {
           title   = "FlightAware Calls And 429s"
-          region  = "$${AWS::Region}"
+          region  = var.aws_region
           view    = "timeSeries"
           stacked = false
           metrics = [
@@ -188,7 +195,7 @@ resource "aws_cloudwatch_dashboard" "flightaware" {
         height = 6
         properties = {
           title   = "Estimated Spend And Stop State"
-          region  = "$${AWS::Region}"
+          region  = var.aws_region
           view    = "timeSeries"
           stacked = false
           metrics = [
@@ -204,15 +211,15 @@ resource "aws_cloudwatch_dashboard" "flightaware" {
         height = 6
         properties = {
           title  = "Lambda Errors And Timeouts"
-          region = "$${AWS::Region}"
+          region = var.aws_region
           view   = "timeSeries"
           metrics = concat(
             [
-              for function_name in var.lambda_function_names :
+              for function_name in keys(var.lambda_timeout_seconds_by_function) :
               ["AWS/Lambda", "Errors", "FunctionName", function_name]
             ],
             [
-              for function_name in var.lambda_function_names :
+              for function_name in keys(var.lambda_timeout_seconds_by_function) :
               [".", "Duration", ".", function_name]
             ]
           )
@@ -224,7 +231,7 @@ resource "aws_cloudwatch_dashboard" "flightaware" {
         height = 6
         properties = {
           title  = "Fetch Queue And DLQ"
-          region = "$${AWS::Region}"
+          region = var.aws_region
           view   = "timeSeries"
           metrics = [
             ["AWS/SQS", "ApproximateAgeOfOldestMessage", "QueueName", var.fetch_task_queue_name],

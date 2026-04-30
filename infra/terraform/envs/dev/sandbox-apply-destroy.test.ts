@@ -35,6 +35,10 @@ type DevOutputs = {
 describe("sandbox AWS apply/destroy integration", () => {
   const terraformReadme = readFileSync("infra/terraform/README.md", "utf8");
   const terraformDesign = readFileSync("infra/terraform/DESIGN.md", "utf8");
+  const devTfvarsExample = readFileSync(
+    "infra/terraform/envs/dev/terraform.tfvars.example",
+    "utf8",
+  );
   const devVariables = readTerraformFile("envs/dev/variables.tf");
 
   it("documents the manual sandbox workflow and keeps it opt-in", () => {
@@ -52,6 +56,17 @@ describe("sandbox AWS apply/destroy integration", () => {
     expect(devVariables).toContain("flightaware_api_key_secret_name");
     expect(terraformReadme).toContain("Do not provide raw API keys through Terraform variables");
     expect(terraformReadme).not.toMatch(/flightaware_api_key_value|api_key_value|secret_string/i);
+  });
+
+  it("uses Lambda artifact defaults produced by make lambda-artifacts", () => {
+    for (const artifactPath of [
+      "../../../../artifacts/dev/api-lambda.zip",
+      "../../../../artifacts/dev/fetcher-lambda.zip",
+      "../../../../artifacts/dev/dispatcher-lambda.zip",
+    ]) {
+      expect(devVariables).toContain(artifactPath);
+      expect(devTfvarsExample).toContain(artifactPath);
+    }
   });
 
   terraformTest(
@@ -80,9 +95,9 @@ describe("sandbox AWS apply/destroy integration", () => {
 
       try {
         for (const artifactPath of [
-          "../../../artifacts/dev/api-lambda.zip",
-          "../../../artifacts/dev/fetcher-lambda.zip",
-          "../../../artifacts/dev/dispatcher-lambda.zip",
+          "../../../../artifacts/dev/api-lambda.zip",
+          "../../../../artifacts/dev/fetcher-lambda.zip",
+          "../../../../artifacts/dev/dispatcher-lambda.zip",
         ]) {
           expect(existsSync(resolve(devRoot, artifactPath)), `${artifactPath} exists`).toBe(true);
         }

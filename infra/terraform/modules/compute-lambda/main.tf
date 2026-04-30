@@ -29,6 +29,13 @@ resource "aws_iam_role_policy" "inline" {
   policy = var.policy_json
 }
 
+resource "aws_cloudwatch_log_group" "this" {
+  name              = "/aws/lambda/${var.function_name}"
+  retention_in_days = var.log_retention_days
+
+  tags = var.tags
+}
+
 resource "aws_lambda_function" "this" {
   function_name = var.function_name
   description   = var.description
@@ -47,4 +54,10 @@ resource "aws_lambda_function" "this" {
   }
 
   tags = var.tags
+
+  depends_on = [
+    aws_cloudwatch_log_group.this,
+    aws_iam_role_policy_attachment.basic_execution,
+    aws_iam_role_policy.inline,
+  ]
 }
