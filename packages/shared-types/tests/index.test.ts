@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Airport, Flight, FlightTimes, FlightEvent, FlightPosition } from "./index.js";
-import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./index.js";
+import type { Airport, Flight, FlightTimes, FlightEvent, FlightPosition } from "../src/index.js";
+import { generateInternalFlightLegId, generateProvisionalFlightLegId } from "../src/index.js";
 import {
   calculateFlightDuration,
   generateFlightEventDedupeKey,
@@ -16,7 +16,7 @@ import {
   normalizeLocalDateTimeToUtcIso,
   normalizeUtcIsoDateTime,
   toNullableDisplayValue,
-} from "./index.js";
+} from "../src/index.js";
 
 describe("shared domain models", () => {
   it("represents a flight with nullable FlightAware fields", () => {
@@ -227,6 +227,12 @@ describe("time normalization", () => {
         timeZone: "America/Los_Angeles",
       }),
     ).toBe("2026-04-25T10:00:00Z");
+    expect(
+      normalizeLocalDateTimeToUtcIso({
+        localDateTime: "2026-04-25T19:00",
+        timeZone: "Asia/Tokyo",
+      }),
+    ).toBe("2026-04-25T10:00:00Z");
   });
 
   it("rejects invalid time inputs instead of guessing", () => {
@@ -406,6 +412,61 @@ describe("flight duration calculation", () => {
         filedEteSeconds: null,
       }),
     ).toBeNull();
+  });
+
+  it("skips non-positive timestamp pairs before falling back", () => {
+    expect(
+      calculateFlightDuration({
+        times: {
+          ...baseTimes,
+          actualOff: "2026-04-25T21:30:00Z",
+          actualOn: "2026-04-25T10:08:00Z",
+          estimatedOff: "2026-04-25T10:05:00Z",
+          estimatedOn: "2026-04-25T10:05:00Z",
+        },
+        filedEteSeconds: 42000,
+      }),
+    ).toEqual({
+      kind: "scheduled",
+      seconds: 42000,
+      startAt: "2026-04-25T10:00:00Z",
+      endAt: "2026-04-25T21:40:00Z",
+    });
+  });
+
+  it("skips non-positive filed ETE before falling back", () => {
+    const timesWithoutRunwayPairs: FlightTimes = {
+      ...baseTimes,
+      actualOff: null,
+      actualOn: null,
+      estimatedOff: null,
+      estimatedOn: null,
+      scheduledOff: null,
+      scheduledOn: null,
+    };
+
+    expect(
+      calculateFlightDuration({
+        times: timesWithoutRunwayPairs,
+        filedEteSeconds: 0,
+      }),
+    ).toEqual({
+      kind: "gate_actual",
+      seconds: 42480,
+      startAt: "2026-04-25T10:02:00Z",
+      endAt: "2026-04-25T21:50:00Z",
+    });
+    expect(
+      calculateFlightDuration({
+        times: timesWithoutRunwayPairs,
+        filedEteSeconds: -1,
+      }),
+    ).toEqual({
+      kind: "gate_actual",
+      seconds: 42480,
+      startAt: "2026-04-25T10:02:00Z",
+      endAt: "2026-04-25T21:50:00Z",
+    });
   });
 });
 
