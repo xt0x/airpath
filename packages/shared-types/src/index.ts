@@ -1,131 +1,24 @@
-export type ISODateTimeString = string;
-export type EpochSeconds = number;
-export type FlightID = string;
-export type InternalFlightLegID = string;
-export type ProvisionalFlightLegID = string;
-export type FAFlightID = string;
-export type AirportCode = string;
-
-export type FlightIDType = "internal" | "provisional";
-
-export type FlightPollState =
-  | "scheduled"
-  | "preparing"
-  | "active"
-  | "arrived"
-  | "cancelled"
-  | "diverted"
-  | "completed"
-  | "error";
-
-export type PositionSource = "flightaware_position" | "flightaware_track" | "manual";
-
-export type PositionUpdateType = "actual" | "estimated" | "predicted" | "surface";
-
-export type AltitudeChange = "climbing" | "descending" | "level";
-
-export type FlightEventType =
-  | "departure"
-  | "off"
-  | "on"
-  | "arrival"
-  | "cancelled"
-  | "diverted"
-  | "departure_delay"
-  | "arrival_delay"
-  | "status_updated";
-
-export type FlightEventSource = "polling";
-
-export interface Airport {
-  code: AirportCode;
-  name: string | null;
-  timezone: string | null;
-}
-
-export interface FlightTimes {
-  scheduledOut: ISODateTimeString | null;
-  estimatedOut: ISODateTimeString | null;
-  actualOut: ISODateTimeString | null;
-  scheduledOff: ISODateTimeString | null;
-  estimatedOff: ISODateTimeString | null;
-  actualOff: ISODateTimeString | null;
-  scheduledOn: ISODateTimeString | null;
-  estimatedOn: ISODateTimeString | null;
-  actualOn: ISODateTimeString | null;
-  scheduledIn: ISODateTimeString | null;
-  estimatedIn: ISODateTimeString | null;
-  actualIn: ISODateTimeString | null;
-}
-
-export interface Flight {
-  flightId: FlightID;
-  flightIdType: FlightIDType;
-  internalFlightLegId: InternalFlightLegID | null;
-  provisionalFlightLegId: ProvisionalFlightLegID | null;
-  faFlightId: FAFlightID | null;
-  ident: string;
-  identIata: string | null;
-  operator: string | null;
-  aircraftType: string | null;
-  registration: string | null;
-  origin: Airport;
-  destination: Airport;
-  originalDestination: Airport | null;
-  diverted: boolean;
-  legIndex: number | null;
-  status: string;
-  progressPercent: number | null;
-  times: FlightTimes;
-  filedEteSeconds: number | null;
-  plannedRouteS3Key: string | null;
-  actualTrackS3Key: string | null;
-  latestPositionTimestamp: ISODateTimeString | null;
-  latestPositionSource: PositionSource | null;
-  pollState: FlightPollState | null;
-  fetchLeaseUntil: ISODateTimeString | null;
-  fetchOwner: string | null;
-  nextSummaryPollAt: ISODateTimeString | null;
-  nextPositionPollAt: ISODateTimeString | null;
-  nextTrackPollAt: ISODateTimeString | null;
-  nextRoutePollAt: ISODateTimeString | null;
-  idleSince: ISODateTimeString | null;
-  updatedAt: ISODateTimeString;
-  ttl: EpochSeconds | null;
-}
-
-export interface FlightPosition {
-  flightId: FlightID;
-  internalFlightLegId: InternalFlightLegID | null;
-  provisionalFlightLegId: ProvisionalFlightLegID | null;
-  faFlightId: FAFlightID | null;
-  latitude: number;
-  longitude: number;
-  altitudeHundredsFeet: number | null;
-  altitudeFeet: number | null;
-  altitudeChange: AltitudeChange | null;
-  groundspeedKnots: number | null;
-  headingDegrees: number | null;
-  timestamp: ISODateTimeString;
-  updateType: PositionUpdateType | null;
-  source: PositionSource;
-  ttl: EpochSeconds | null;
-}
-
-export interface FlightEvent {
-  flightId: FlightID;
-  internalFlightLegId: InternalFlightLegID | null;
-  provisionalFlightLegId: ProvisionalFlightLegID | null;
-  faFlightId: FAFlightID | null;
-  dedupeKey: string;
-  eventType: FlightEventType;
-  eventTimestamp: ISODateTimeString;
-  payload: Record<string, unknown>;
-  source: FlightEventSource;
-  appliedToFlightState: boolean;
-  createdAt: ISODateTimeString;
-}
-
+export type {
+  Airport,
+  AirportCode,
+  AltitudeChange,
+  EpochSeconds,
+  FAFlightID,
+  Flight,
+  FlightEvent,
+  FlightEventSource,
+  FlightEventType,
+  FlightID,
+  FlightIDType,
+  FlightPollState,
+  FlightPosition,
+  FlightTimes,
+  InternalFlightLegID,
+  ISODateTimeString,
+  PositionSource,
+  PositionUpdateType,
+  ProvisionalFlightLegID,
+} from "./domain-types.js";
 export { generateInternalFlightLegId, generateProvisionalFlightLegId } from "./id-generation.js";
 export type { InternalFlightLegIDInput, ProvisionalFlightLegIDInput } from "./id-generation.js";
 export {
@@ -158,10 +51,14 @@ export type { FlightEventDedupeKeyInput } from "./event-dedupe.js";
 export {
   apiContract,
   apiErrorCodes,
+  apiRouteBuilders,
+  apiRouteTemplates,
   fetchTaskSchema,
   fetchTaskTypes,
   mvpExcludedContracts,
+  refreshTaskTypes,
 } from "./api-contract.js";
+export type { FlightPositionsRouteQuery } from "./api-contract.js";
 export type {
   ApiError,
   ApiErrorCode,
@@ -172,6 +69,7 @@ export type {
   FetchTaskType,
   FlightDetailResponse,
   FlightMapDataResponse,
+  FlightPositionsResponse,
   FlightRefreshResponse,
   FlightSearchResponse,
   FlightSummaryItem,
@@ -180,5 +78,6 @@ export type {
   MapSource,
   MvpExcludedContract,
   Position,
+  RefreshTaskType,
   UsageStatusResponse,
 } from "./api-contract.js";

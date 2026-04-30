@@ -1,6 +1,6 @@
 # Shared Types Source Design
 
-This source directory owns TypeScript domain contracts that are shared by the web app, API contract work, and fixtures.
+This source directory owns TypeScript domain contracts that are shared by the web app, API contract work, and fixtures. Domain model definitions live in `domain-types.ts`; `index.ts` is the public barrel that re-exports domain, helper, and API contract surfaces.
 
 ## L2-01 Domain Model Baseline
 
@@ -34,21 +34,21 @@ The helpers never coerce nullish values to `0` or an empty string. Go mirrors th
 
 ## L2-04 Time Normalization
 
-Time normalization helpers convert FlightAware timestamps and UI local date-time input into UTC ISO 8601 strings without milliseconds. FlightAware values must include `Z` or a numeric offset, and UI input must provide both a local ISO date-time string and an IANA timezone.
+Time normalization helpers convert FlightAware timestamps and UI local date-time input into UTC ISO 8601 strings without milliseconds. FlightAware values must include `Z` or a numeric offset, and UI input must provide both a local ISO date-time string, with or without seconds, and an IANA timezone.
 
 The helpers reject invalid timestamps and invalid timezone names instead of guessing. Go mirrors the TypeScript behavior in `services/internal/domain`.
 
 ## L2-05 Position Metric Conversion
 
-Position metric helpers normalize FlightAware-derived altitude, speed, and heading fields without inventing values when the source is missing. `altitudeFeet` is calculated only when `altitudeHundredsFeet` is present, using `altitudeHundredsFeet * 100`.
+Position metric helpers normalize FlightAware-derived altitude, speed, and heading fields without inventing values when the source is missing. `altitudeFeet` is calculated only when `altitudeHundredsFeet` is present, using `altitudeHundredsFeet * 100`. API position DTOs also carry nullable altitude-change and update-type values when FlightAware supplies them.
 
 Groundspeed remains in knots. Heading remains in degrees, with `360` normalized to `0` for display rotation because the specification treats those values as equivalent. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
 
 ## L2-06 Flight Duration Calculation
 
-Flight duration helpers calculate the best available duration using the specification priority order: actual runway time, estimated runway time, scheduled runway time, filed ETE, then actual gate-to-gate time.
+Flight duration helpers calculate the best available duration using the specification priority order: actual runway time, estimated runway time, scheduled runway time, positive filed ETE, then actual gate-to-gate time.
 
-The result keeps the duration kind and, when the duration came from timestamps, the normalized UTC start and end timestamps. Incomplete timestamp pairs are skipped rather than partially calculated. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
+The result keeps the duration kind and, when the duration came from timestamps, the normalized UTC start and end timestamps. Incomplete or non-positive timestamp pairs and non-positive filed ETE values are skipped rather than partially calculated. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
 
 ## L2-07 Event Dedupe Key Generation
 
@@ -56,16 +56,30 @@ Event dedupe helpers generate stable hash keys for polling-derived events. The k
 
 When `faFlightId` is unavailable for a provisional scheduled flight, the helper uses `provisionalFlightLegId`, matching the specification. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
 
-## F4 API Contract Definition
+## API Contract Definition
 
 The package exports an OpenAPI 3.1 MVP contract for the backend HTTP API. The contract defines only the free-allowance surfaces needed before UI and Go API implementation: flight search, flight detail, map-data, positions, bounded refresh requests, and usage status.
 
-Every success response carries `CacheMetadata` so callers can distinguish fresh cache, stale cache, cache misses, derived data, local accounting, and FlightAware-backed data. Typed error responses cover budget stop, rate limiting, stale-cache misses, upstream failures, and explicit FlightAware fetch disablement.
+The contract source is split by responsibility: `api-types.ts` owns TypeScript DTOs, `api-schemas.ts` owns reusable OpenAPI schema fragments, `api-paths.ts` owns route definitions, and `api-contract.ts` assembles the public OpenAPI literal and re-exports the stable API surface.
+
+Flight search is ident-only in the shared contract. Date-scoped search is intentionally not advertised until the backend search use case and cache/upstream lookup path accept an explicit date filter.
+
+Map-data responses are returned as the full planned, actual, and current layer set. Position history exposes only `since` and `limit` query parameters. Layer filtering, map simplification, and position quality modes are intentionally not advertised until the backend application inputs implement those behaviors.
+
+Every success response carries `CacheMetadata` so callers can distinguish fresh cache, stale cache, cache misses, derived data, local accounting, and FlightAware-backed data. Typed error responses cover validation failures, budget stop, rate limiting, stale-cache misses, upstream failures, and explicit FlightAware fetch disablement.
 
 Usage status includes the monthly budget scope (`environment` and `month`) so the API contract matches the backend DynamoDB usage budget state.
 
-`FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
+`FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. Public refresh requests use the non-summary subset because summary fetches are seeded through search misses. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
 
 The package also exports TypeScript response interfaces for the API contract so frontend callers do not redefine response shapes independently from the shared contract source.
 
 API response value objects that overlap with the shared domain model, such as airports and flight times, are derived from the domain exports instead of being redefined separately.
+
+Shared FNV-1a hashing for deterministic IDs and dedupe keys lives in one package-private helper so hash behavior does not drift between TypeScript helper categories.
+
+Contract fixtures under `packages/shared-types/fixtures` are owned by this package boundary. They are included in package metadata and covered by a fixture-focused TypeScript config so shared JSON-backed tests stay type checked without becoming production build output.
+
+API route templates and concrete browser route builders live beside the OpenAPI path source. Frontend code imports those builders instead of hardcoding `/v1` endpoint strings, keeping the TypeScript contract and browser client aligned.
+
+Unit tests for shared source live under `packages/shared-types/test` instead of `src`, with `tsconfig.test.json` keeping those tests type checked while `src` remains limited to production package source and this design note.
