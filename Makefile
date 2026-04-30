@@ -101,26 +101,7 @@ terraform-validate:
 	TERRAFORM="$(TERRAFORM)" bash scripts/ci/terraform-validate.sh
 
 terraform-test:
-	$(TERRAFORM) -chdir=infra/terraform/envs/dev init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/envs/dev test
-	$(TERRAFORM) -chdir=infra/terraform/envs/stg init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/envs/stg test
-	$(TERRAFORM) -chdir=infra/terraform/envs/prod init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/envs/prod test
-	$(TERRAFORM) -chdir=infra/terraform/modules/api-http init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/api-http test
-	$(TERRAFORM) -chdir=infra/terraform/modules/compute-lambda init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/compute-lambda test
-	$(TERRAFORM) -chdir=infra/terraform/modules/data-dynamodb init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/data-dynamodb test
-	$(TERRAFORM) -chdir=infra/terraform/modules/eventing init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/eventing test
-	$(TERRAFORM) -chdir=infra/terraform/modules/observability init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/observability test
-	$(TERRAFORM) -chdir=infra/terraform/modules/secrets init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/secrets test
-	$(TERRAFORM) -chdir=infra/terraform/modules/storage-s3 init -backend=false -input=false
-	$(TERRAFORM) -chdir=infra/terraform/modules/storage-s3 test
+	TERRAFORM="$(TERRAFORM)" bash scripts/ci/terraform-test.sh
 
 terraform-check:
 	$(MAKE) terraform-fmt
