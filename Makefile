@@ -18,7 +18,7 @@ help:
 		'  make ci                Run the pull request gate locally' \
 		'  make lambda-artifacts  Build dev Lambda zip artifacts' \
 		'  make format            Format supported files' \
-		'  make terraform-test    Run native Terraform module tests' \
+		'  make terraform-test    Run native Terraform module and root tests' \
 		'  make terraform-check   Run Terraform fmt, validate, test, and lint'
 
 pnpm-install:
@@ -97,6 +97,10 @@ terraform-validate:
 	TERRAFORM="$(TERRAFORM)" bash scripts/ci/terraform-validate.sh
 
 terraform-test:
+	$(TERRAFORM) -chdir=infra/terraform/envs/stg init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/envs/stg test
+	$(TERRAFORM) -chdir=infra/terraform/envs/prod init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/envs/prod test
 	$(TERRAFORM) -chdir=infra/terraform/modules/api-http init -backend=false -input=false
 	$(TERRAFORM) -chdir=infra/terraform/modules/api-http test
 	$(TERRAFORM) -chdir=infra/terraform/modules/compute-lambda init -backend=false -input=false

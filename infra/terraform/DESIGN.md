@@ -6,7 +6,7 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 
 - `bootstrap` creates the shared Terraform state backend, lockfile access, encryption key, GitHub OIDC provider, and CI plan role.
 - `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime.
-- `envs/stg` and `envs/prod` validate provider, backend, variable, and output shape only. They must not imply deployable infrastructure until a shared environment module or explicit root resource graph is added.
+- `envs/stg` and `envs/prod` validate provider, backend, variable, and output shape only. They carry native Terraform tests for environment defaults and invalid environment rejection, plus Vitest contract tests that keep resources, data sources, and modules absent until a shared environment module or explicit root resource graph is added.
 - `modules/api-http` owns HTTP API v2 routing to the API Lambda.
 - `modules/compute-lambda` owns Lambda execution roles, basic logging, inline least-privilege policy attachment, runtime settings, artifact references, and environment variables.
 - `modules/data-dynamodb` owns flight cache, lookup/idempotency, position history, and usage budget tables.
@@ -16,6 +16,8 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 - `modules/observability` owns dashboards and CloudWatch alarms for Lambda, SQS, FlightAware, and budget signals.
 
 Each reusable module declares its own Terraform and AWS provider requirements and carries native Terraform tests in `tests/*.tftest.hcl`. These tests use Terraform mock providers so module contracts are checked through Terraform-interpreted plan/apply values without AWS credentials or live AWS resources.
+
+The staging and production roots are intentionally non-deployable placeholders. Their tests are contract guards: they prove the root owns exactly one environment name, retain backend wiring as a bootstrap placeholder, expose only the `environment` output, and fail if deployable Terraform blocks are added without updating the environment design.
 
 ## Runtime Contract
 

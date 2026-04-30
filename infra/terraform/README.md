@@ -14,6 +14,8 @@ Only the dev environment currently declares resources. The stg and prod roots ke
 
 Reusable modules declare their own Terraform and AWS provider requirements so they can be initialized and tested directly. Module-level tests use Terraform's mock provider to inspect interpreted plan/apply values without requiring AWS credentials or creating AWS resources.
 
+The stg and prod roots also carry native `terraform test` coverage under `tests/` to prove their default environment output and reject cross-environment variable values. Vitest HCL contract tests keep their placeholder shape explicit: provider, backend, variables, and outputs only, with no resources, data sources, or modules until deployable staging or production infrastructure is intentionally introduced.
+
 ## Naming And Secrets
 
 Terraform resource names follow the root naming policy: `airpath-${environment}` for the resource prefix and `airpath-${environment}-${table-suffix}` for DynamoDB tables. Environment directories are scoped to exactly one environment and validate their own `environment` variable.
@@ -49,7 +51,7 @@ make terraform-test
 make terraform-check
 ```
 
-`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes each reusable module with `-backend=false` and runs its native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
+`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes the stg/prod placeholder roots and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
 
 ## Dev Personal Demo
 

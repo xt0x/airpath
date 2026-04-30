@@ -4,7 +4,11 @@
 deployment permissions stay environment-scoped.
 
 Only `dev` currently creates AWS resources. `stg` and `prod` are placeholders
-that validate provider configuration and environment naming only.
+that validate provider configuration and environment naming only. Their native
+Terraform tests assert the root-specific environment default and reject other
+environment names; the Vitest HCL contract test asserts backend, provider,
+variable, and output shape and confirms they do not declare deployable
+infrastructure.
 
 The `dev` root wires API, fetcher, and dispatcher Lambda environment variables
 from module outputs and root-level runtime controls. Fetch workflow Lambdas that
