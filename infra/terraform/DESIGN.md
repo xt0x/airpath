@@ -5,7 +5,7 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 ## Responsibilities
 
 - `bootstrap` creates the shared Terraform state backend, lockfile access, encryption key, GitHub OIDC provider, and CI plan role.
-- `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime.
+- `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime and carries native validation-failure tests for environment scoping, artifact retention, and fetch-task DLQ thresholds.
 - `envs/stg` and `envs/prod` validate provider, backend, variable, and output shape only. They carry native Terraform tests for environment defaults and invalid environment rejection, plus Vitest contract tests that keep resources, data sources, and modules absent until a shared environment module or explicit root resource graph is added.
 - `modules/api-http` owns HTTP API v2 routing to the API Lambda.
 - `modules/compute-lambda` owns Lambda execution roles, basic logging, inline least-privilege policy attachment, runtime settings, artifact references, and environment variables.
@@ -15,7 +15,7 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 - `modules/secrets` owns Secrets Manager secret metadata only. Secret values are created or rotated outside Terraform state.
 - `modules/observability` owns dashboards and CloudWatch alarms for Lambda, SQS, FlightAware, and budget signals.
 
-Each reusable module declares its own Terraform and AWS provider requirements and carries native Terraform tests in `tests/*.tftest.hcl`. These tests use Terraform mock providers so module contracts are checked through Terraform-interpreted plan/apply values without AWS credentials or live AWS resources.
+Each reusable module declares its own Terraform and AWS provider requirements and carries native Terraform tests in `tests/*.tftest.hcl`. These tests use Terraform mock providers so module contracts are checked through Terraform-interpreted plan/apply values without AWS credentials or live AWS resources. Input validation belongs at the nearest owner: reusable modules reject invalid reusable inputs such as Lambda memory and timeout ranges, S3 retention periods, and fetch-task DLQ thresholds; environment roots reject invalid environment-scoped values before they reach composed modules.
 
 The staging and production roots are intentionally non-deployable placeholders. Their tests are contract guards: they prove the root owns exactly one environment name, retain backend wiring as a bootstrap placeholder, expose only the `environment` output, and fail if deployable Terraform blocks are added without updating the environment design.
 

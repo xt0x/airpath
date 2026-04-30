@@ -97,6 +97,8 @@ terraform-validate:
 	TERRAFORM="$(TERRAFORM)" bash scripts/ci/terraform-validate.sh
 
 terraform-test:
+	$(TERRAFORM) -chdir=infra/terraform/envs/dev init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/envs/dev test
 	$(TERRAFORM) -chdir=infra/terraform/envs/stg init -backend=false -input=false
 	$(TERRAFORM) -chdir=infra/terraform/envs/stg test
 	$(TERRAFORM) -chdir=infra/terraform/envs/prod init -backend=false -input=false

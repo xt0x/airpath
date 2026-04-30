@@ -51,7 +51,7 @@ make terraform-test
 make terraform-check
 ```
 
-`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes the stg/prod placeholder roots and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
+`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes the dev root, the stg/prod placeholder roots, and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
 
 ## Dev Personal Demo
 
@@ -66,3 +66,5 @@ The dev root owns the deployed runtime contract for the Go services:
 - Dispatcher Lambda: EventBridge schedule, due-poll DynamoDB reads and updates, fetch-task idempotency reservations, fetch task SQS send access, and the runtime queue/table environment variables required by `services/internal/runtimewiring`.
 
 The dispatcher uses `DISPATCHER_ASSUME_ACTIVE_VIEWER=true` in dev so the personal demo can enqueue due polling tasks without a separate viewer activity signal. Staging and production should revisit that input when they introduce a real activity source.
+
+The dev root also validates environment-specific deployment inputs before planning resources. It rejects non-dev environment names, non-positive GeoJSON artifact retention, and non-positive fetch-task DLQ receive thresholds. Module tests cover the same reusable contracts where the input belongs to a module.
