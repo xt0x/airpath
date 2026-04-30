@@ -6,6 +6,7 @@ import (
 )
 
 type RuntimeFetchConfig struct {
+	ExternalFetchEnabled   bool
 	RouteFetchEnabled      bool
 	TrackFetchEnabled      bool
 	BackgroundFetchEnabled bool
@@ -30,6 +31,9 @@ func (p *RuntimeFetchPolicy) FetchTaskAllowed(_ context.Context, taskType FetchT
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
+	if !p.config.ExternalFetchEnabled {
+		return false, nil
+	}
 	if reason == FetchReasonLowFrequencyPoll && !p.config.BackgroundFetchEnabled {
 		return false, nil
 	}

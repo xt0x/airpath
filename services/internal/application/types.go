@@ -54,17 +54,40 @@ const (
 	FetchReasonUsageReconciliation FetchReason = "usage_reconciliation"
 )
 
+func IsValidFetchTaskType(taskType FetchTaskType) bool {
+	switch taskType {
+	case FetchTaskSummary, FetchTaskPosition, FetchTaskRoute, FetchTaskTrack, FetchTaskFinalTrack:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsValidFetchReason(reason FetchReason) bool {
+	switch reason {
+	case FetchReasonSearchResultSeed,
+		FetchReasonUserOpenedDetail,
+		FetchReasonUserManualRefresh,
+		FetchReasonLowFrequencyPoll,
+		FetchReasonArrivalFinalization,
+		FetchReasonUsageReconciliation:
+		return true
+	default:
+		return false
+	}
+}
+
 type FetchTask struct {
 	SchemaVersion  int                `json:"schemaVersion"`
 	TaskID         string             `json:"taskId"`
 	TaskType       FetchTaskType      `json:"taskType"`
 	FlightID       domain.FlightID    `json:"flightId"`
-	FAFlightID     *domain.FAFlightID `json:"faFlightId"`
+	FAFlightID     *domain.FAFlightID `json:"faFlightId,omitempty"`
 	RequestedAt    string             `json:"requestedAt"`
 	Reason         FetchReason        `json:"reason"`
 	IdempotencyKey string             `json:"idempotencyKey"`
 	NotBefore      *string            `json:"notBefore,omitempty"`
-	Attempt        int                `json:"attempt"`
+	Attempt        int                `json:"attempt,omitempty"`
 }
 
 type MapSource string
@@ -85,14 +108,16 @@ type MapLayer struct {
 }
 
 type Position struct {
-	Latitude             float64               `json:"latitude"`
-	Longitude            float64               `json:"longitude"`
-	AltitudeHundredsFeet *int                  `json:"altitudeHundredsFeet"`
-	AltitudeFeet         *int                  `json:"altitudeFeet"`
-	GroundspeedKnots     *int                  `json:"groundspeedKnots"`
-	HeadingDegrees       *int                  `json:"headingDegrees"`
-	Timestamp            string                `json:"timestamp"`
-	Source               domain.PositionSource `json:"source"`
+	Latitude             float64                    `json:"latitude"`
+	Longitude            float64                    `json:"longitude"`
+	AltitudeHundredsFeet *int                       `json:"altitudeHundredsFeet"`
+	AltitudeFeet         *int                       `json:"altitudeFeet"`
+	AltitudeChange       *domain.AltitudeChange     `json:"altitudeChange"`
+	GroundspeedKnots     *int                       `json:"groundspeedKnots"`
+	HeadingDegrees       *int                       `json:"headingDegrees"`
+	Timestamp            string                     `json:"timestamp"`
+	UpdateType           *domain.PositionUpdateType `json:"updateType"`
+	Source               domain.PositionSource      `json:"source"`
 }
 
 type FlightDetail struct {
@@ -137,6 +162,12 @@ type FlightDetailResponse struct {
 	Track   MapLayer      `json:"track"`
 	Current *Position     `json:"current"`
 	Cache   CacheMetadata `json:"cache"`
+}
+
+type FlightPositionsResponse struct {
+	FlightID domain.FlightID `json:"flightId"`
+	Items    []Position      `json:"items"`
+	Cache    CacheMetadata   `json:"cache"`
 }
 
 type FlightMapDataResponse struct {
@@ -190,6 +221,13 @@ type FlightMapDataInput struct {
 	CheckedAt string
 }
 
+type FlightPositionsInput struct {
+	FlightID  domain.FlightID
+	Since     *string
+	Limit     int
+	CheckedAt string
+}
+
 type FlightRefreshInput struct {
 	FlightID      domain.FlightID
 	TaskTypes     []FetchTaskType
@@ -214,20 +252,59 @@ type ExternalRouteResponse struct {
 }
 
 type ExternalPositionResponse struct {
-	FAFlightID string
-	Latitude   *float64
-	Longitude  *float64
-	Timestamp  string
+	FAFlightID           string
+	Latitude             *float64
+	Longitude            *float64
+	AltitudeHundredsFeet *int
+	AltitudeChange       *domain.AltitudeChange
+	GroundspeedKnots     *int
+	HeadingDegrees       *int
+	Timestamp            string
+	UpdateType           *domain.PositionUpdateType
 }
 
 type ExternalTrackPoint struct {
-	Latitude  float64
-	Longitude float64
-	Timestamp string
+	Latitude             float64
+	Longitude            float64
+	AltitudeHundredsFeet *int
+	AltitudeChange       *domain.AltitudeChange
+	GroundspeedKnots     *int
+	HeadingDegrees       *int
+	Timestamp            string
+	UpdateType           *domain.PositionUpdateType
 }
 
 type ExternalTrackResponse struct {
 	Positions []ExternalTrackPoint
+}
+
+type ExternalSearchFlightsResponse struct {
+	Flights []ExternalFlightSummary
+}
+
+type ExternalFlightSummary struct {
+	FAFlightID      *string
+	Ident           string
+	IdentIATA       *string
+	AircraftType    *string
+	Registration    *string
+	Origin          string
+	Destination     string
+	ScheduledOut    *domain.ISODateTimeString
+	EstimatedOut    *domain.ISODateTimeString
+	ActualOut       *domain.ISODateTimeString
+	ScheduledOff    *domain.ISODateTimeString
+	EstimatedOff    *domain.ISODateTimeString
+	ActualOff       *domain.ISODateTimeString
+	ScheduledOn     *domain.ISODateTimeString
+	EstimatedOn     *domain.ISODateTimeString
+	ActualOn        *domain.ISODateTimeString
+	ScheduledIn     *domain.ISODateTimeString
+	EstimatedIn     *domain.ISODateTimeString
+	ActualIn        *domain.ISODateTimeString
+	Status          string
+	ProgressPercent *int
+	FiledEteSeconds *int
 }
 
 const DefaultSoftStopThresholdUSD = 4.00
@@ -268,6 +345,7 @@ const (
 	ApiErrorStaleCacheUnavailable     ApiErrorCode = "stale_cache_unavailable"
 	ApiErrorUpstreamFailure           ApiErrorCode = "upstream_failure"
 	ApiErrorFlightAwareFetchDisabled  ApiErrorCode = "flightaware_fetch_disabled"
+	ApiErrorValidationFailed          ApiErrorCode = "validation_failed"
 )
 
 type APIError struct {
@@ -276,16 +354,18 @@ type APIError struct {
 	Retryable           bool         `json:"retryable"`
 	RequestID           string       `json:"requestId"`
 	RetryAfterSeconds   *int         `json:"retryAfterSeconds,omitempty"`
-	StaleCacheAvailable bool         `json:"staleCacheAvailable"`
+	StaleCacheAvailable bool         `json:"staleCacheAvailable,omitempty"`
 }
 
 var (
-	ErrBudgetExceeded        = errors.New("flightaware budget exceeded")
-	ErrUpstreamRateLimited   = errors.New("upstream rate limited")
-	ErrUpstreamFetchDisabled = errors.New("upstream fetch disabled")
-	ErrStaleCacheUnavailable = errors.New("stale cache unavailable")
-	ErrNotFound              = errors.New("not found")
-	ErrValidation            = errors.New("validation failed")
+	ErrBudgetExceeded               = errors.New("flightaware budget exceeded")
+	ErrUpstreamRateLimited          = errors.New("upstream rate limited")
+	ErrUpstreamFetchDisabled        = errors.New("upstream fetch disabled")
+	ErrStaleCacheUnavailable        = errors.New("stale cache unavailable")
+	ErrNotFound                     = errors.New("not found")
+	ErrValidation                   = errors.New("validation failed")
+	ErrAtomicPositionWriterRequired = errors.New("atomic position writer required")
+	ErrAtomicTrackWriterRequired    = errors.New("atomic track writer required")
 )
 
 func ptr(value string) *string {

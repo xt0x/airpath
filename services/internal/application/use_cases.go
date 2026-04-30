@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"airpath/services/internal/domain"
@@ -12,7 +13,12 @@ import (
 const FetchTaskDedupeWindow = 5 * time.Minute
 
 func (a *Application) SearchFlights(ctx context.Context, input SearchFlightsInput) (FlightSearchResponse, error) {
-	flights, cache, err := a.flights.SearchByIdent(ctx, input.Ident)
+	ident := strings.TrimSpace(input.Ident)
+	if ident == "" {
+		return FlightSearchResponse{}, ErrValidation
+	}
+
+	flights, cache, err := a.flights.SearchByIdent(ctx, ident)
 	if err != nil {
 		return FlightSearchResponse{}, err
 	}
@@ -29,14 +35,22 @@ func (a *Application) SearchFlights(ctx context.Context, input SearchFlightsInpu
 		return FlightSearchResponse{}, ErrBudgetExceeded
 	}
 
+	taskAllowed, err := a.fetchTaskAllowed(ctx, FetchTaskSummary, FetchReasonSearchResultSeed)
+	if err != nil {
+		return FlightSearchResponse{}, err
+	}
+	if !taskAllowed {
+		return FlightSearchResponse{}, ErrUpstreamFetchDisabled
+	}
+
 	_, err = a.fetchTasks.EnqueueFetchTask(ctx, FetchTask{
 		SchemaVersion:  1,
-		TaskID:         stableTaskID("search", domain.FlightID(input.Ident), FetchTaskSummary, input.CheckedAt),
+		TaskID:         stableTaskID("search", domain.FlightID(ident), FetchTaskSummary, input.CheckedAt),
 		TaskType:       FetchTaskSummary,
-		FlightID:       domain.FlightID(input.Ident),
+		FlightID:       domain.FlightID(ident),
 		RequestedAt:    input.CheckedAt,
 		Reason:         FetchReasonSearchResultSeed,
-		IdempotencyKey: stableTaskID("search", domain.FlightID(input.Ident), FetchTaskSummary, "seed"),
+		IdempotencyKey: fetchTaskWindowKey("search", domain.FlightID(ident), FetchTaskSummary, input.CheckedAt),
 	})
 	if err != nil {
 		return FlightSearchResponse{}, err
@@ -104,7 +118,41 @@ func (a *Application) GetFlightMapData(ctx context.Context, input FlightMapDataI
 	}, nil
 }
 
+func (a *Application) GetFlightPositions(ctx context.Context, input FlightPositionsInput) (FlightPositionsResponse, error) {
+	positions, cache, err := a.positions.ListPositions(ctx, input.FlightID, input.Since, input.Limit)
+	if err != nil {
+		return FlightPositionsResponse{}, err
+	}
+	cache.CheckedAt = input.CheckedAt
+
+	items := make([]Position, 0, len(positions))
+	for _, position := range positions {
+		mapped := mapPosition(&position)
+		if mapped != nil {
+			items = append(items, *mapped)
+		}
+	}
+
+	return FlightPositionsResponse{
+		FlightID: input.FlightID,
+		Items:    items,
+		Cache:    cache,
+	}, nil
+}
+
 func (a *Application) RequestFlightRefresh(ctx context.Context, input FlightRefreshInput) (FlightRefreshResponse, error) {
+	if !IsValidFetchReason(input.ClientReason) {
+		return FlightRefreshResponse{}, ErrValidation
+	}
+	for _, taskType := range input.TaskTypes {
+		if !IsValidFetchTaskType(taskType) {
+			return FlightRefreshResponse{}, ErrValidation
+		}
+		if taskType != FetchTaskSummary && !fetchTaskReasonAllowedForType(taskType, input.ClientReason) {
+			return FlightRefreshResponse{}, ErrValidation
+		}
+	}
+
 	flight, cache, err := a.flights.GetFlight(ctx, input.FlightID)
 	if err != nil {
 		return FlightRefreshResponse{}, err
@@ -121,6 +169,12 @@ func (a *Application) RequestFlightRefresh(ctx context.Context, input FlightRefr
 
 	accepted := make([]FetchTask, 0, len(input.TaskTypes))
 	for _, taskType := range dedupeTaskTypes(input.TaskTypes) {
+		if taskType == FetchTaskSummary {
+			continue
+		}
+		if flight.FAFlightID == nil || *flight.FAFlightID == "" {
+			continue
+		}
 		taskAllowed, err := a.fetchTaskAllowed(ctx, taskType, input.ClientReason)
 		if err != nil {
 			return FlightRefreshResponse{}, err
@@ -136,7 +190,7 @@ func (a *Application) RequestFlightRefresh(ctx context.Context, input FlightRefr
 			FAFlightID:     flight.FAFlightID,
 			RequestedAt:    input.RequestedAt,
 			Reason:         input.ClientReason,
-			IdempotencyKey: fetchTaskWindowKey(input.FlightID, taskType, input.RequestedAt),
+			IdempotencyKey: fetchTaskWindowKey("refresh", input.FlightID, taskType, input.RequestedAt),
 		}
 		enqueued, err := a.fetchTasks.EnqueueFetchTask(ctx, task)
 		if err != nil {
@@ -186,7 +240,7 @@ func MapApplicationError(err error, requestID string) APIError {
 	case errors.Is(err, ErrNotFound):
 		return apiError(ApiErrorStaleCacheUnavailable, "Requested cached resource was not found", false, requestID)
 	case errors.Is(err, ErrValidation):
-		return apiError(ApiErrorUpstreamFailure, "Request validation failed", false, requestID)
+		return apiError(ApiErrorValidationFailed, "Request validation failed", false, requestID)
 	default:
 		return apiError(ApiErrorUpstreamFailure, "Upstream request failed", true, requestID)
 	}
@@ -240,9 +294,11 @@ func mapPosition(position *domain.FlightPosition) *Position {
 		Longitude:            position.Longitude,
 		AltitudeHundredsFeet: position.AltitudeHundredsFeet,
 		AltitudeFeet:         position.AltitudeFeet,
+		AltitudeChange:       position.AltitudeChange,
 		GroundspeedKnots:     position.GroundspeedKnots,
 		HeadingDegrees:       position.HeadingDegrees,
 		Timestamp:            position.Timestamp,
+		UpdateType:           position.UpdateType,
 		Source:               position.Source,
 	}
 }
@@ -286,12 +342,12 @@ func stableTaskID(prefix string, flightID domain.FlightID, taskType FetchTaskTyp
 	return fmt.Sprintf("%s:%s:%s:%v", prefix, flightID, taskType, suffix)
 }
 
-func fetchTaskWindowKey(flightID domain.FlightID, taskType FetchTaskType, requestedAt string) string {
+func fetchTaskWindowKey(prefix string, flightID domain.FlightID, taskType FetchTaskType, requestedAt string) string {
 	windowStart := requestedAt
 	if parsed, err := time.Parse(time.RFC3339, requestedAt); err == nil {
 		windowStart = parsed.UTC().Truncate(FetchTaskDedupeWindow).Format("2006-01-02T15:04:05Z")
 	}
-	return stableTaskID("refresh", flightID, taskType, windowStart)
+	return stableTaskID(prefix, flightID, taskType, windowStart)
 }
 
 func staleCache(cache CacheMetadata, checkedAt string) CacheMetadata {
