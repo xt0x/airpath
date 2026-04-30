@@ -12,6 +12,7 @@ import (
 	"airpath/services/internal/application"
 	"airpath/services/internal/domain"
 	"airpath/services/internal/flightaware"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 func TestDynamoDBRepositoriesReadAndWriteFlightsLookupPositionsAndUsageBudget(t *testing.T) {
@@ -40,6 +41,12 @@ func TestDynamoDBRepositoriesReadAndWriteFlightsLookupPositionsAndUsageBudget(t 
 		Longitude: 160.456,
 		Timestamp: "2026-04-29T00:05:00Z",
 		Source:    domain.PositionSourceFlightAwarePosition,
+	}
+	olderPosition := position
+	olderPosition.Timestamp = "2026-04-29T00:01:00Z"
+	olderPosition.Latitude = 44.5
+	if err := repo.PutPosition(ctx, olderPosition); err != nil {
+		t.Fatalf("PutPosition(older) error = %v", err)
 	}
 	if err := repo.PutPosition(ctx, position); err != nil {
 		t.Fatalf("PutPosition() error = %v", err)
@@ -79,6 +86,13 @@ func TestDynamoDBRepositoriesReadAndWriteFlightsLookupPositionsAndUsageBudget(t 
 	}
 	if latest == nil || latest.Timestamp != "2026-04-29T00:05:00Z" {
 		t.Fatalf("latest = %#v", latest)
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, ptrString("2026-04-29T00:02:00Z"), 10)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != 1 || history[0].Timestamp != "2026-04-29T00:05:00Z" {
+		t.Fatalf("history = %#v, want only the newer position", history)
 	}
 
 	gotUsage, err := repo.GetUsageStatus(ctx)
@@ -817,25 +831,1362 @@ func TestDynamoDBRepositoryListsDuePollFlightsAndUsesFlightLease(t *testing.T) {
 	}
 }
 
-func TestDynamoDBRepositoryStoresFlightAwarePositionResponse(t *testing.T) {
+func TestDynamoDBRepositorySkipsTTLExpiredPollFlights(t *testing.T) {
 	ctx := context.Background()
-	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{FlightPositions: "FlightPositions"})
-
-	if err := repo.PutFlightAwarePosition(ctx, "iflg_1", flightaware.PositionResponse{
-		FAFlightID: "fa_1",
-		Latitude:   ptrFloat64(45.12),
-		Longitude:  ptrFloat64(160.45),
-		Timestamp:  "2026-06-20T09:30:00Z",
-	}); err != nil {
-		t.Fatalf("PutFlightAwarePosition() error = %v", err)
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights: "Flights",
+	})
+	expired := testFlight("iflg_expired_poll", "ANA110")
+	expired.NextPositionPollAt = ptrISO("2026-04-29T00:00:00Z")
+	expiredTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 4, 59, 0, time.UTC).Unix())
+	expired.TTL = &expiredTTL
+	due := testFlight("iflg_due_poll", "ANA111")
+	due.NextPositionPollAt = ptrISO("2026-04-29T00:00:00Z")
+	dueTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 6, 0, 0, time.UTC).Unix())
+	due.TTL = &dueTTL
+	if err := repo.PutFlight(ctx, expired); err != nil {
+		t.Fatalf("PutFlight(expired) error = %v", err)
+	}
+	if err := repo.PutFlight(ctx, due); err != nil {
+		t.Fatalf("PutFlight(due) error = %v", err)
 	}
 
-	position, _, err := repo.GetLatestPosition(ctx, "iflg_1")
+	flights, err := repo.ListPollableFlights(ctx, "2026-04-29T00:05:00Z", 10)
 	if err != nil {
-		t.Fatalf("GetLatestPosition() error = %v", err)
+		t.Fatalf("ListPollableFlights() error = %v", err)
 	}
-	if position == nil || position.Latitude != 45.12 || position.Longitude != 160.45 || position.Source != domain.PositionSourceFlightAwarePosition {
-		t.Fatalf("position = %#v", position)
+	if len(flights) != 1 || flights[0].FlightID != due.FlightID {
+		t.Fatalf("pollable flights = %#v, want only unexpired due flight", flights)
+	}
+}
+
+func TestDynamoDBRepositoryPollLimitCountsUnexpiredFlights(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights: "Flights",
+	})
+	expiredTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 4, 59, 0, time.UTC).Unix())
+	validTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 6, 0, 0, time.UTC).Unix())
+	expired := testFlight("iflg_expired_poll_limit", "ANA110")
+	expired.NextPositionPollAt = ptrISO("2026-04-29T00:00:00Z")
+	expired.TTL = &expiredTTL
+	valid := testFlight("iflg_valid_poll_limit", "ANA111")
+	valid.NextPositionPollAt = ptrISO("2026-04-29T00:00:01Z")
+	valid.TTL = &validTTL
+	if err := repo.PutFlight(ctx, expired); err != nil {
+		t.Fatalf("PutFlight(expired) error = %v", err)
+	}
+	if err := repo.PutFlight(ctx, valid); err != nil {
+		t.Fatalf("PutFlight(valid) error = %v", err)
+	}
+
+	flights, err := repo.ListPollableFlights(ctx, "2026-04-29T00:05:00Z", 1)
+	if err != nil {
+		t.Fatalf("ListPollableFlights() error = %v", err)
+	}
+	if len(flights) != 1 || flights[0].FlightID != valid.FlightID {
+		t.Fatalf("pollable flights with limit = %#v, want first unexpired due flight", flights)
+	}
+}
+
+func TestDynamoDBRepositoryPollLimitUsesBoundedPagesUntilEnoughValidFlights(t *testing.T) {
+	ctx := context.Background()
+	client := &countingPollPageDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights: "Flights",
+	})
+	expiredTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 4, 59, 0, time.UTC).Unix())
+	validTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 6, 0, 0, time.UTC).Unix())
+	for index := 0; index < pollQueryPageLimit+3; index++ {
+		expired := testFlight(domain.FlightID(fmt.Sprintf("iflg_expired_poll_page_%02d", index)), "ANA110")
+		expired.NextPositionPollAt = ptrISO(fmt.Sprintf("2026-04-29T00:00:%02dZ", index))
+		expired.TTL = &expiredTTL
+		if err := repo.PutFlight(ctx, expired); err != nil {
+			t.Fatalf("PutFlight(expired %d) error = %v", index, err)
+		}
+	}
+	valid := testFlight("iflg_valid_poll_page", "ANA111")
+	valid.NextPositionPollAt = ptrISO("2026-04-29T00:00:40Z")
+	valid.TTL = &validTTL
+	if err := repo.PutFlight(ctx, valid); err != nil {
+		t.Fatalf("PutFlight(valid) error = %v", err)
+	}
+
+	flights, err := repo.ListPollableFlights(ctx, "2026-04-29T00:05:00Z", 1)
+	if err != nil {
+		t.Fatalf("ListPollableFlights() error = %v", err)
+	}
+	if len(flights) != 1 || flights[0].FlightID != valid.FlightID {
+		t.Fatalf("pollable flights with paged limit = %#v, want first unexpired due flight", flights)
+	}
+	if client.sawUnboundedQuery {
+		t.Fatal("ListPollableFlights used an unbounded due-poll query")
+	}
+	if client.pageCalls < 2 {
+		t.Fatalf("page calls = %d, want multiple bounded pages after expired rows", client.pageCalls)
+	}
+	if client.maxPageLimit > pollQueryPageLimit {
+		t.Fatalf("max page limit = %d, want at most %d", client.maxPageLimit, pollQueryPageLimit)
+	}
+}
+
+func TestDynamoDBRepositoryRejectsTTLExpiredFlightLeaseAcquisition(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights: "Flights",
+	})
+	flight := testFlight("iflg_expired_lease_acquire", "ANA110")
+	expiredTTL := domain.EpochSeconds(time.Date(2026, 4, 29, 0, 4, 59, 0, time.UTC).Unix())
+	flight.TTL = &expiredTTL
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+
+	_, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("AcquireFetchLease(expired) error = %v, want ErrNotFound", err)
+	}
+	if ok {
+		t.Fatal("AcquireFetchLease(expired) acquired lease")
+	}
+}
+
+func TestDynamoDBRepositoryDoesNotClearActiveLeaseWhenUpdatingPollSchedule(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{Flights: "Flights"})
+	flight := testFlight("iflg_poll_schedule_lease", "ANA110")
+	flight.NextPositionPollAt = ptrISO("2026-04-29T00:00:00Z")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	staleDispatcherSnapshot := flight
+
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	timestamp := domain.ISODateTimeString("2026-04-29T00:06:00Z")
+	leased.LatestPositionTimestamp = &timestamp
+	if updated, err := repo.UpdateFetchedFlight(ctx, leased, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z"); err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlight() = %v, %v", updated, err)
+	}
+
+	staleDispatcherSnapshot.NextPositionPollAt = ptrISO("2026-04-29T00:20:00Z")
+	if err := repo.UpdatePollSchedule(ctx, staleDispatcherSnapshot); err != nil {
+		t.Fatalf("UpdatePollSchedule(stale snapshot) error = %v", err)
+	}
+
+	got, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if got.FetchOwner == nil || *got.FetchOwner != "worker-1" || got.FetchLeaseUntil == nil || *got.FetchLeaseUntil != "2026-04-29T00:10:00Z" {
+		t.Fatalf("lease fields = owner %v until %v, want active worker lease retained", got.FetchOwner, got.FetchLeaseUntil)
+	}
+	if got.LatestPositionTimestamp == nil || *got.LatestPositionTimestamp != timestamp {
+		t.Fatalf("LatestPositionTimestamp = %v, want fetched metadata retained", got.LatestPositionTimestamp)
+	}
+	if got.NextPositionPollAt == nil || *got.NextPositionPollAt != "2026-04-29T00:00:00Z" {
+		t.Fatalf("NextPositionPollAt = %v, want stale schedule update ignored while lease changed", got.NextPositionPollAt)
+	}
+}
+
+func TestDynamoDBRepositoryReleaseFetchLeaseDoesNotOverwriteFetchedMetadataFromStaleRead(t *testing.T) {
+	ctx := context.Background()
+	client := &staleFlightReadDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{Flights: "Flights"})
+	flight := testFlight("iflg_release_stale_read", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	staleLeasedItem := flightItem(leased)
+	routeKey := "routes/iflg_release_stale_read/hash.json"
+	leased.PlannedRouteS3Key = &routeKey
+	if updated, err := repo.UpdateFetchedFlight(ctx, leased, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z"); err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlight() = %v, %v", updated, err)
+	}
+	client.staleNextFlightGet = staleLeasedItem
+
+	if err := repo.ReleaseFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:07:00Z"); err != nil {
+		t.Fatalf("ReleaseFetchLease() error = %v", err)
+	}
+	client.staleNextFlightGet = nil
+	got, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if got.PlannedRouteS3Key == nil || *got.PlannedRouteS3Key != routeKey {
+		t.Fatalf("PlannedRouteS3Key = %v, want fetched route metadata retained", got.PlannedRouteS3Key)
+	}
+	if got.FetchOwner != nil || got.FetchLeaseUntil != nil {
+		t.Fatalf("lease fields = owner %v until %v, want released lease", got.FetchOwner, got.FetchLeaseUntil)
+	}
+}
+
+func TestDynamoDBRepositoryPollScheduleDoesNotOverwriteFetchedMetadataAfterStaleRead(t *testing.T) {
+	ctx := context.Background()
+	client := &staleFlightReadDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{Flights: "Flights"})
+	flight := testFlight("iflg_poll_stale_read", "ANA110")
+	flight.NextPositionPollAt = ptrISO("2026-04-29T00:00:00Z")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	staleItem := flightItem(flight)
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	routeKey := "routes/iflg_poll_stale_read/hash.json"
+	leased.PlannedRouteS3Key = &routeKey
+	if updated, err := repo.UpdateFetchedFlight(ctx, leased, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z"); err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlight() = %v, %v", updated, err)
+	}
+	if err := repo.ReleaseFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:07:00Z"); err != nil {
+		t.Fatalf("ReleaseFetchLease() error = %v", err)
+	}
+	client.staleNextFlightGet = staleItem
+
+	scheduled := flight
+	scheduled.NextPositionPollAt = ptrISO("2026-04-29T00:20:00Z")
+	if err := repo.UpdatePollSchedule(ctx, scheduled); err != nil {
+		t.Fatalf("UpdatePollSchedule() error = %v", err)
+	}
+	client.staleNextFlightGet = nil
+	got, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if got.PlannedRouteS3Key == nil || *got.PlannedRouteS3Key != routeKey {
+		t.Fatalf("PlannedRouteS3Key = %v, want fetched route metadata retained", got.PlannedRouteS3Key)
+	}
+	if got.NextPositionPollAt == nil || *got.NextPositionPollAt != "2026-04-29T00:00:00Z" {
+		t.Fatalf("NextPositionPollAt = %v, want stale schedule update skipped", got.NextPositionPollAt)
+	}
+}
+
+func TestDynamoDBRepositoryAcquireFetchLeaseDoesNotOverwriteFetchedMetadataAfterStaleRead(t *testing.T) {
+	ctx := context.Background()
+	client := &staleFlightReadDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{Flights: "Flights"})
+	flight := testFlight("iflg_acquire_stale_read", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	staleItem := flightItem(flight)
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(worker-1) = %v, %v", ok, err)
+	}
+	routeKey := "routes/iflg_acquire_stale_read/hash.json"
+	leased.PlannedRouteS3Key = &routeKey
+	if updated, err := repo.UpdateFetchedFlight(ctx, leased, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z"); err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlight() = %v, %v", updated, err)
+	}
+	if err := repo.ReleaseFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:07:00Z"); err != nil {
+		t.Fatalf("ReleaseFetchLease() error = %v", err)
+	}
+	client.staleNextFlightGet = staleItem
+
+	leased, ok, err = repo.AcquireFetchLease(ctx, flight.FlightID, "worker-2", "2026-04-29T00:15:00Z", "2026-04-29T00:08:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(worker-2) = %v, %v", ok, err)
+	}
+	if leased.PlannedRouteS3Key == nil || *leased.PlannedRouteS3Key != routeKey {
+		t.Fatalf("leased PlannedRouteS3Key = %v, want fetched route metadata retained", leased.PlannedRouteS3Key)
+	}
+	client.staleNextFlightGet = nil
+	got, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if got.PlannedRouteS3Key == nil || *got.PlannedRouteS3Key != routeKey {
+		t.Fatalf("stored PlannedRouteS3Key = %v, want fetched route metadata retained", got.PlannedRouteS3Key)
+	}
+	if got.FetchOwner == nil || *got.FetchOwner != "worker-2" || got.FetchLeaseUntil == nil || *got.FetchLeaseUntil != "2026-04-29T00:15:00Z" {
+		t.Fatalf("lease fields = owner %v until %v, want worker-2 lease", got.FetchOwner, got.FetchLeaseUntil)
+	}
+}
+
+func TestDynamoDBRepositoryRejectsFetchedFlightUpdateAfterLeaseIsStolen(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{Flights: "Flights"})
+	faFlightID := domain.FAFlightID("fa_stale_1")
+	flight := domain.Flight{
+		FlightID:     "iflg_stale_1",
+		FlightIDType: domain.FlightIDTypeInternal,
+		FAFlightID:   &faFlightID,
+		Ident:        "ANA110",
+		Origin:       domain.Airport{Code: "RJTT"},
+		Destination:  domain.Airport{Code: "KJFK"},
+		Status:       "En Route",
+		UpdatedAt:    "2026-04-29T00:00:00Z",
+	}
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	workerOneFlight, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(worker-1) = %v, %v", ok, err)
+	}
+	_, ok, err = repo.AcquireFetchLease(ctx, flight.FlightID, "worker-2", "2026-04-29T00:11:00Z", "2026-04-29T00:06:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(worker-2) = %v, %v", ok, err)
+	}
+
+	timestamp := domain.ISODateTimeString("2026-04-29T00:07:00Z")
+	workerOneFlight.LatestPositionTimestamp = &timestamp
+	updated, err := repo.UpdateFetchedFlight(ctx, workerOneFlight, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:07:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlight(stale worker) error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlight(stale worker) updated flight after lease was stolen")
+	}
+	got, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if got.LatestPositionTimestamp != nil {
+		t.Fatalf("LatestPositionTimestamp = %v, want stale update ignored", *got.LatestPositionTimestamp)
+	}
+	if got.FetchOwner == nil || *got.FetchOwner != "worker-2" {
+		t.Fatalf("FetchOwner = %v, want worker-2 retained", got.FetchOwner)
+	}
+}
+
+func TestDynamoDBRepositoryRejectsFetchedFlightUpdateAfterLeaseExpires(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{Flights: "Flights"})
+	flight := testFlight("iflg_expired_fetch_update", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+
+	timestamp := domain.ISODateTimeString("2026-04-29T00:07:00Z")
+	leased.LatestPositionTimestamp = &timestamp
+	updated, err := repo.UpdateFetchedFlight(ctx, leased, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:06:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlight(expired lease) error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlight(expired lease) updated flight after lease expired")
+	}
+	got, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if got.LatestPositionTimestamp != nil {
+		t.Fatalf("LatestPositionTimestamp = %v, want expired lease update ignored", *got.LatestPositionTimestamp)
+	}
+}
+
+func TestDynamoDBRepositoryRejectsFetchedPositionUpdateAfterLeaseExpires(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_expired_position_update", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	position := domain.FlightPosition{
+		FlightID:  flight.FlightID,
+		Latitude:  35.55,
+		Longitude: 139.78,
+		Timestamp: "2026-04-29T00:06:00Z",
+		Source:    domain.PositionSourceFlightAwarePosition,
+	}
+	leased.LatestPositionTimestamp = &position.Timestamp
+
+	updated, err := repo.UpdateFetchedFlightWithPosition(ctx, leased, position, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:06:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithPosition(expired lease) error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlightWithPosition(expired lease) updated after lease expired")
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 10)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("positions written after expired lease = %d, want 0", len(history))
+	}
+}
+
+func TestDynamoDBRepositoryRejectsLargeTrackCommitAfterLeaseExpires(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_expired_large_track", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	positions := largeTrackPositions(flight.FlightID, 0, 120)
+
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:05:00Z", "2026-04-29T00:06:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions(expired lease) error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions(expired lease) updated after lease expired")
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("large track positions visible after expired lease = %d, want 0", len(history))
+	}
+}
+
+func TestDynamoDBRepositoryStoresLargeTrackPositionsWithLeaseGuard(t *testing.T) {
+	ctx := context.Background()
+	client := &countingCollectionDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	positions := make([]domain.FlightPosition, 0, 120)
+	for index := 0; index < 120; index++ {
+		positions = append(positions, domain.FlightPosition{
+			FlightID:  flight.FlightID,
+			Latitude:  float64(index),
+			Longitude: float64(index),
+			Timestamp: fmt.Sprintf("2026-04-29T00:%02d:%02dZ", index/60, index%60),
+			Source:    domain.PositionSourceFlightAwareTrack,
+		})
+	}
+
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if !updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = false, want true")
+	}
+	if client.collectionCalls != 0 {
+		t.Fatalf("collection calls = %d, want large track to avoid partial flight publishes", client.collectionCalls)
+	}
+	if client.positionWrites != len(positions) {
+		t.Fatalf("guarded position writes = %d, want %d", client.positionWrites, len(positions))
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(positions) {
+		t.Fatalf("stored positions = %d, want %d", len(history), len(positions))
+	}
+}
+
+func TestDynamoDBRepositoryUpdatesExistingLargeTrackPositionRows(t *testing.T) {
+	ctx := context.Background()
+	client := &countingCollectionDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_update", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	existing := domain.FlightPosition{
+		FlightID:  flight.FlightID,
+		Latitude:  35.55,
+		Longitude: 139.78,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	}
+	if err := repo.PutPosition(ctx, existing); err != nil {
+		t.Fatalf("PutPosition(existing) error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	positions := make([]domain.FlightPosition, 0, 120)
+	for index := 0; index < 120; index++ {
+		positions = append(positions, domain.FlightPosition{
+			FlightID:  flight.FlightID,
+			Latitude:  float64(index) + 0.25,
+			Longitude: float64(index) + 0.5,
+			Timestamp: fmt.Sprintf("2026-04-29T00:%02d:%02dZ", index/60, index%60),
+			Source:    domain.PositionSourceFlightAwareTrack,
+		})
+	}
+
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if !updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = false, want true")
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(positions) {
+		t.Fatalf("stored positions = %d, want %d", len(history), len(positions))
+	}
+	if history[0].Latitude != 0.25 || history[0].Longitude != 0.5 {
+		t.Fatalf("first history row = %#v, want existing timestamp overwritten by refreshed track", history[0])
+	}
+}
+
+func TestDynamoDBRepositoryDoesNotLeaveLargeTrackPartialsWhenLeaseIsLost(t *testing.T) {
+	ctx := context.Background()
+	client := &leaseLosingTrackDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient(), loseAfterPositionWrites: 100}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_lost", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	trackKey := "tracks/iflg_large_track_lost/hash.json"
+	timestamp := domain.ISODateTimeString("2026-04-29T00:01:59Z")
+	leased.ActualTrackS3Key = &trackKey
+	leased.LatestPositionTimestamp = &timestamp
+	positions := make([]domain.FlightPosition, 0, 120)
+	for index := 0; index < 120; index++ {
+		positions = append(positions, domain.FlightPosition{
+			FlightID:  flight.FlightID,
+			Latitude:  float64(index),
+			Longitude: float64(index),
+			Timestamp: fmt.Sprintf("2026-04-29T00:%02d:%02dZ", index/60, index%60),
+			Source:    domain.PositionSourceFlightAwareTrack,
+		})
+	}
+
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = true after lease loss")
+	}
+
+	stored, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	if stored.ActualTrackS3Key != nil || stored.LatestPositionTimestamp != nil {
+		t.Fatalf("stored flight = %#v, want track metadata unchanged after lease loss", stored)
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("stored partial positions = %d, want rollback after lease loss", len(history))
+	}
+}
+
+func TestDynamoDBRepositoryDoesNotExposeLargeTrackPositionsBeforeFlightCommit(t *testing.T) {
+	ctx := context.Background()
+	client := &observingTrackWriteDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	client.repo = repo
+	client.ctx = ctx
+	flight := testFlight("iflg_large_track_staged", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	positions := make([]domain.FlightPosition, 0, 120)
+	for index := 0; index < 120; index++ {
+		positions = append(positions, domain.FlightPosition{
+			FlightID:  flight.FlightID,
+			Latitude:  float64(index),
+			Longitude: float64(index),
+			Timestamp: fmt.Sprintf("2026-04-29T00:%02d:%02dZ", index/60, index%60),
+			Source:    domain.PositionSourceFlightAwareTrack,
+		})
+	}
+
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if !updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = false, want true")
+	}
+	if client.visibleDuringWrite != 0 {
+		t.Fatalf("visible staged positions during write = %d, want 0 before flight commit", client.visibleDuringWrite)
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(positions) {
+		t.Fatalf("visible positions after commit = %d, want %d", len(history), len(positions))
+	}
+
+	scheduled, _, err := repo.GetFlight(ctx, flight.FlightID)
+	if err != nil {
+		t.Fatalf("GetFlight() error = %v", err)
+	}
+	scheduled.NextPositionPollAt = ptrISO("2026-04-29T00:20:00Z")
+	if err := repo.UpdatePollSchedule(ctx, scheduled); err != nil {
+		t.Fatalf("UpdatePollSchedule() error = %v", err)
+	}
+	history, _, err = repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions(after schedule update) error = %v", err)
+	}
+	if len(history) != len(positions) {
+		t.Fatalf("visible positions after schedule update = %d, want committed large track positions preserved", len(history))
+	}
+}
+
+func TestDynamoDBRepositoryClearsLargeTrackWriteTokensAfterCommit(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryDynamoDBClient()
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_token_cleanup", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+
+	positions := largeTrackPositions(flight.FlightID, 0, 120)
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if !updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = false, want true")
+	}
+
+	flightItem, ok, err := client.GetItem(ctx, "Flights", "flightId", string(flight.FlightID))
+	if err != nil {
+		t.Fatalf("GetItem(flight) error = %v", err)
+	}
+	if !ok {
+		t.Fatal("flight item not found")
+	}
+	if token := stringValue(flightItem[committedPositionWriteTokenAttribute]); token != "" {
+		t.Fatalf("committedPositionWriteToken = %q, want cleared after committed rows are normalized", token)
+	}
+	if tokens := stringValue(flightItem[committedPositionWriteTokensAttribute]); tokens != "" {
+		t.Fatalf("committedPositionWriteTokens = %q, want cleared after committed rows are normalized", tokens)
+	}
+	positionItems, err := client.QueryRange(ctx, "FlightPositions", "", "flightId", string(flight.FlightID), "timestamp", nil, 0, false)
+	if err != nil {
+		t.Fatalf("QueryRange(positions) error = %v", err)
+	}
+	if len(positionItems) != len(positions) {
+		t.Fatalf("stored position rows = %d, want %d", len(positionItems), len(positions))
+	}
+	for _, item := range positionItems {
+		if token := stringValue(item[positionWriteTokenAttribute]); token != "" {
+			t.Fatalf("position %s retained write token %q after commit cleanup", stringValue(item["timestamp"]), token)
+		}
+	}
+}
+
+func TestDynamoDBRepositoryReportsLargeTrackCommitCleanupLeaseMiss(t *testing.T) {
+	ctx := context.Background()
+	client := &leaseLosingFlightTokenCleanupDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient()}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_cleanup_lease_miss", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+
+	positions := largeTrackPositions(flight.FlightID, 0, 120)
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = true after final token cleanup lease miss")
+	}
+
+	flightItem, ok, err := client.GetItem(ctx, "Flights", "flightId", string(flight.FlightID))
+	if err != nil {
+		t.Fatalf("GetItem(flight) error = %v", err)
+	}
+	if !ok {
+		t.Fatal("flight item not found")
+	}
+	if token := stringValue(flightItem[committedPositionWriteTokenAttribute]); token == "" {
+		t.Fatal("committedPositionWriteToken was cleared despite cleanup lease miss")
+	}
+	positionItems, err := client.QueryRange(ctx, "FlightPositions", "", "flightId", string(flight.FlightID), "timestamp", nil, 0, false)
+	if err != nil {
+		t.Fatalf("QueryRange(positions) error = %v", err)
+	}
+	for _, item := range positionItems {
+		if token := stringValue(item[positionWriteTokenAttribute]); token != "" {
+			t.Fatalf("position %s retained write token %q after row cleanup completed", stringValue(item["timestamp"]), token)
+		}
+	}
+}
+
+func TestDynamoDBRepositoryKeepsCommittedLargeTrackTokenWhenCleanupMissesRow(t *testing.T) {
+	ctx := context.Background()
+	client := &cleanupMissingTrackDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient(), missCleanupOnce: true}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_cleanup_miss", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+
+	positions := largeTrackPositions(flight.FlightID, 0, 120)
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if !updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = false, want true")
+	}
+
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(positions) {
+		t.Fatalf("visible positions after incomplete cleanup = %d, want %d", len(history), len(positions))
+	}
+
+	flightItem, ok, err := client.GetItem(ctx, "Flights", "flightId", string(flight.FlightID))
+	if err != nil {
+		t.Fatalf("GetItem(flight) error = %v", err)
+	}
+	if !ok {
+		t.Fatal("flight item not found")
+	}
+	if token := stringValue(flightItem[committedPositionWriteTokenAttribute]); token == "" {
+		t.Fatal("committedPositionWriteToken was cleared after incomplete cleanup")
+	}
+
+	positionItems, err := client.QueryRange(ctx, "FlightPositions", "", "flightId", string(flight.FlightID), "timestamp", nil, 0, false)
+	if err != nil {
+		t.Fatalf("QueryRange(positions) error = %v", err)
+	}
+	retainedPositionTokens := 0
+	for _, item := range positionItems {
+		if stringValue(item[positionWriteTokenAttribute]) != "" {
+			retainedPositionTokens++
+		}
+	}
+	if retainedPositionTokens != 1 {
+		t.Fatalf("position rows with retained write tokens = %d, want 1", retainedPositionTokens)
+	}
+}
+
+func TestDynamoDBRepositoryKeepsCleanupMissedLargeTrackRowsAfterNextLargeCommit(t *testing.T) {
+	ctx := context.Background()
+	client := &cleanupMissingTrackDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient(), missCleanupOnce: true}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_cleanup_miss_next", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+
+	firstLease, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(first) = %v, %v", ok, err)
+	}
+	firstPositions := largeTrackPositions(flight.FlightID, 0, 120)
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, firstLease, firstPositions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions(first) = %v, %v", updated, err)
+	}
+	if err := repo.ReleaseFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z"); err != nil {
+		t.Fatalf("ReleaseFetchLease(first) error = %v", err)
+	}
+
+	secondLease, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-2", "2026-04-29T00:20:00Z", "2026-04-29T00:06:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(second) = %v, %v", ok, err)
+	}
+	secondPositions := largeTrackPositions(flight.FlightID, 120, 120)
+	updated, err = repo.UpdateFetchedFlightWithTrackPositions(ctx, secondLease, secondPositions, "worker-2", "2026-04-29T00:20:00Z", "2026-04-29T00:10:00Z")
+	if err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions(second) = %v, %v", updated, err)
+	}
+
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 300)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(firstPositions)+len(secondPositions) {
+		t.Fatalf("visible positions after next large commit = %d, want %d", len(history), len(firstPositions)+len(secondPositions))
+	}
+}
+
+func TestDynamoDBRepositoryKeepsPreviousCommittedLargeTrackRowsAfterSecondCommit(t *testing.T) {
+	ctx := context.Background()
+	repo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_second_commit", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+
+	firstLease, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(first) = %v, %v", ok, err)
+	}
+	firstPositions := largeTrackPositions(flight.FlightID, 0, 120)
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, firstLease, firstPositions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions(first) = %v, %v", updated, err)
+	}
+	if err := repo.ReleaseFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:06:00Z"); err != nil {
+		t.Fatalf("ReleaseFetchLease(first) error = %v", err)
+	}
+
+	secondLease, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-2", "2026-04-29T00:20:00Z", "2026-04-29T00:06:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease(second) = %v, %v", ok, err)
+	}
+	secondPositions := largeTrackPositions(flight.FlightID, 120, 120)
+	updated, err = repo.UpdateFetchedFlightWithTrackPositions(ctx, secondLease, secondPositions, "worker-2", "2026-04-29T00:20:00Z", "2026-04-29T00:10:00Z")
+	if err != nil || !updated {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions(second) = %v, %v", updated, err)
+	}
+
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 300)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(firstPositions)+len(secondPositions) {
+		t.Fatalf("visible positions after second commit = %d, want %d", len(history), len(firstPositions)+len(secondPositions))
+	}
+	if history[0].Timestamp != firstPositions[0].Timestamp {
+		t.Fatalf("first visible timestamp = %q, want previous committed row %q", history[0].Timestamp, firstPositions[0].Timestamp)
+	}
+	if history[len(history)-1].Timestamp != secondPositions[len(secondPositions)-1].Timestamp {
+		t.Fatalf("last visible timestamp = %q, want latest committed row %q", history[len(history)-1].Timestamp, secondPositions[len(secondPositions)-1].Timestamp)
+	}
+}
+
+func TestDynamoDBRepositoryPreservesExistingLargeTrackHistoryOnRollback(t *testing.T) {
+	ctx := context.Background()
+	client := &leaseLosingTrackDynamoDBClient{MemoryDynamoDBClient: NewMemoryDynamoDBClient(), loseAfterPositionWrites: 2}
+	repo := NewDynamoDBRepository(client, DynamoDBTables{
+		Flights:         "Flights",
+		FlightPositions: "FlightPositions",
+	})
+	flight := testFlight("iflg_large_track_existing", "ANA110")
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+	existing := []domain.FlightPosition{
+		{
+			FlightID:  flight.FlightID,
+			Latitude:  35.55,
+			Longitude: 139.78,
+			Timestamp: "2026-04-29T00:00:00Z",
+			Source:    domain.PositionSourceFlightAwareTrack,
+		},
+		{
+			FlightID:  flight.FlightID,
+			Latitude:  36.00,
+			Longitude: 140.00,
+			Timestamp: "2026-04-29T00:00:01Z",
+			Source:    domain.PositionSourceFlightAwareTrack,
+		},
+	}
+	for _, position := range existing {
+		if err := repo.PutPosition(ctx, position); err != nil {
+			t.Fatalf("PutPosition() error = %v", err)
+		}
+	}
+	leased, ok, err := repo.AcquireFetchLease(ctx, flight.FlightID, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:00:00Z")
+	if err != nil || !ok {
+		t.Fatalf("AcquireFetchLease() = %v, %v", ok, err)
+	}
+	positions := make([]domain.FlightPosition, 0, 120)
+	for index := 0; index < 120; index++ {
+		positions = append(positions, domain.FlightPosition{
+			FlightID:  flight.FlightID,
+			Latitude:  float64(index),
+			Longitude: float64(index),
+			Timestamp: fmt.Sprintf("2026-04-29T00:%02d:%02dZ", index/60, index%60),
+			Source:    domain.PositionSourceFlightAwareTrack,
+		})
+	}
+
+	updated, err := repo.UpdateFetchedFlightWithTrackPositions(ctx, leased, positions, "worker-1", "2026-04-29T00:10:00Z", "2026-04-29T00:05:00Z")
+	if err != nil {
+		t.Fatalf("UpdateFetchedFlightWithTrackPositions() error = %v", err)
+	}
+	if updated {
+		t.Fatal("UpdateFetchedFlightWithTrackPositions() updated = true after lease loss")
+	}
+	history, _, err := repo.ListPositions(ctx, flight.FlightID, nil, 200)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != len(existing) {
+		t.Fatalf("stored positions = %d, want only %d pre-existing positions", len(history), len(existing))
+	}
+	for index, position := range existing {
+		if history[index].Timestamp != position.Timestamp || history[index].Latitude != position.Latitude || history[index].Longitude != position.Longitude {
+			t.Fatalf("history[%d] = %#v, want existing %#v preserved", index, history[index], position)
+		}
+	}
+}
+
+func largeTrackPositions(flightID domain.FlightID, startSecond int, count int) []domain.FlightPosition {
+	positions := make([]domain.FlightPosition, 0, count)
+	for index := 0; index < count; index++ {
+		offset := startSecond + index
+		positions = append(positions, domain.FlightPosition{
+			FlightID:  flightID,
+			Latitude:  float64(offset),
+			Longitude: float64(offset),
+			Timestamp: fmt.Sprintf("2026-04-29T00:%02d:%02dZ", offset/60, offset%60),
+			Source:    domain.PositionSourceFlightAwareTrack,
+		})
+	}
+	return positions
+}
+
+func TestDynamoDBRepositoryRollbackDoesNotDeleteNewerPositionRows(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryDynamoDBClient()
+	repo := NewDynamoDBRepository(client, DynamoDBTables{FlightPositions: "FlightPositions"})
+	staleWritten := positionItem(domain.FlightPosition{
+		FlightID:  "iflg_large_track_newer",
+		Latitude:  35,
+		Longitude: 139,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	})
+	if err := client.PutItem(ctx, "FlightPositions", staleWritten); err != nil {
+		t.Fatalf("PutItem(staleWritten) error = %v", err)
+	}
+	newer := domain.FlightPosition{
+		FlightID:  "iflg_large_track_newer",
+		Latitude:  36,
+		Longitude: 140,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	}
+	if err := client.PutItem(ctx, "FlightPositions", positionItem(newer)); err != nil {
+		t.Fatalf("PutItem(newer) error = %v", err)
+	}
+
+	repo.rollbackPositionItemsBestEffort(ctx, []largeTrackPositionWrite{{item: staleWritten, existed: false}})
+
+	history, _, err := repo.ListPositions(ctx, newer.FlightID, nil, 10)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != 1 || history[0].Latitude != newer.Latitude || history[0].Longitude != newer.Longitude {
+		t.Fatalf("history after rollback = %#v, want newer row preserved", history)
+	}
+}
+
+func TestDynamoDBRepositoryRollbackDoesNotDeleteNewerIdenticalPositionRows(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryDynamoDBClient()
+	repo := NewDynamoDBRepository(client, DynamoDBTables{FlightPositions: "FlightPositions"})
+
+	position := domain.FlightPosition{
+		FlightID:  "iflg_large_track_identical_newer",
+		Latitude:  35,
+		Longitude: 139,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	}
+	staleWritten := positionItem(position)
+	staleWritten["positionWriteToken"] = "stale-write"
+	newerWritten := positionItem(position)
+	newerWritten["positionWriteToken"] = "newer-write"
+	if err := client.PutItem(ctx, "FlightPositions", newerWritten); err != nil {
+		t.Fatalf("PutItem(newerWritten) error = %v", err)
+	}
+
+	repo.rollbackPositionItemsBestEffort(ctx, []largeTrackPositionWrite{{item: staleWritten, existed: false}})
+
+	item, ok, err := repo.getPositionItem(ctx, staleWritten)
+	if err != nil {
+		t.Fatalf("getPositionItem() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("position was deleted by stale rollback, want newer identical row preserved")
+	}
+	if got := stringValue(item["positionWriteToken"]); got != "newer-write" {
+		t.Fatalf("positionWriteToken = %q, want newer-write", got)
+	}
+}
+
+func TestDynamoDBRepositoryRollbackDoesNotOverwriteNewerPositionRows(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryDynamoDBClient()
+	repo := NewDynamoDBRepository(client, DynamoDBTables{FlightPositions: "FlightPositions"})
+	previous := positionItem(domain.FlightPosition{
+		FlightID:  "iflg_large_track_existing_newer",
+		Latitude:  35,
+		Longitude: 139,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	})
+	staleWritten := positionItem(domain.FlightPosition{
+		FlightID:  "iflg_large_track_existing_newer",
+		Latitude:  35.5,
+		Longitude: 139.5,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	})
+	if err := client.PutItem(ctx, "FlightPositions", staleWritten); err != nil {
+		t.Fatalf("PutItem(staleWritten) error = %v", err)
+	}
+	newer := domain.FlightPosition{
+		FlightID:  "iflg_large_track_existing_newer",
+		Latitude:  36,
+		Longitude: 140,
+		Timestamp: "2026-04-29T00:00:00Z",
+		Source:    domain.PositionSourceFlightAwareTrack,
+	}
+	if err := client.PutItem(ctx, "FlightPositions", positionItem(newer)); err != nil {
+		t.Fatalf("PutItem(newer) error = %v", err)
+	}
+
+	repo.rollbackPositionItemsBestEffort(ctx, []largeTrackPositionWrite{{item: staleWritten, previous: previous, existed: true}})
+
+	history, _, err := repo.ListPositions(ctx, newer.FlightID, nil, 10)
+	if err != nil {
+		t.Fatalf("ListPositions() error = %v", err)
+	}
+	if len(history) != 1 || history[0].Latitude != newer.Latitude || history[0].Longitude != newer.Longitude {
+		t.Fatalf("history after rollback = %#v, want newer row preserved", history)
+	}
+}
+
+func TestTransactionCanceledWithoutReasonsIsNotTreatedAsConditionFailure(t *testing.T) {
+	if transactionCanceledBecauseConditionFailed(&ddbtypes.TransactionCanceledException{}) {
+		t.Fatal("empty TransactionCanceledException reasons were treated as a conditional lease miss")
+	}
+	if !transactionCanceledBecauseConditionFailed(&ddbtypes.TransactionCanceledException{
+		CancellationReasons: []ddbtypes.CancellationReason{{Code: ptrString("ConditionalCheckFailed")}},
+	}) {
+		t.Fatal("ConditionalCheckFailed cancellation reason was not treated as a lease miss")
+	}
+	if !transactionCanceledBecauseConditionFailed(&ddbtypes.TransactionCanceledException{
+		CancellationReasons: []ddbtypes.CancellationReason{
+			{Code: ptrString("ConditionalCheckFailed")},
+			{Code: ptrString("None")},
+		},
+	}) {
+		t.Fatal("ConditionalCheckFailed with None cancellation reason was not treated as a lease miss")
+	}
+	if transactionCanceledBecauseConditionFailed(&ddbtypes.TransactionCanceledException{
+		CancellationReasons: []ddbtypes.CancellationReason{
+			{Code: ptrString("ConditionalCheckFailed")},
+			{Code: ptrString("TransactionConflict")},
+		},
+	}) {
+		t.Fatal("mixed cancellation reasons were treated as a conditional lease miss")
+	}
+}
+
+type countingCollectionDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	maxExtraItems   int
+	collectionCalls int
+	positionWrites  int
+}
+
+type countingPollPageDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	pageCalls         int
+	maxPageLimit      int
+	sawUnboundedQuery bool
+}
+
+func (c *countingPollPageDynamoDBClient) QueryRangeUntilPage(ctx context.Context, table string, indexName string, hashName string, hashValue string, rangeName string, until string, limit int, exclusiveStartKey map[string]any) ([]map[string]any, map[string]any, error) {
+	c.pageCalls++
+	if limit == 0 {
+		c.sawUnboundedQuery = true
+	}
+	if limit > c.maxPageLimit {
+		c.maxPageLimit = limit
+	}
+	return c.MemoryDynamoDBClient.QueryRangeUntilPage(ctx, table, indexName, hashName, hashValue, rangeName, until, limit, exclusiveStartKey)
+}
+
+func (c *countingCollectionDynamoDBClient) PutItemCollectionIfLeaseOwner(ctx context.Context, table string, item map[string]any, extraTable string, extraItems []map[string]any, owner string, leaseUntil string, now string) (bool, error) {
+	c.collectionCalls++
+	if len(extraItems) > c.maxExtraItems {
+		c.maxExtraItems = len(extraItems)
+	}
+	if len(extraItems) > 99 {
+		return false, fmt.Errorf("test transaction item count %d exceeds DynamoDB limit", len(extraItems)+1)
+	}
+	return c.MemoryDynamoDBClient.PutItemCollectionIfLeaseOwner(ctx, table, item, extraTable, extraItems, owner, leaseUntil, now)
+}
+
+func (c *countingCollectionDynamoDBClient) PutItemIfOtherItemLeaseOwner(ctx context.Context, table string, item map[string]any, conditionTable string, conditionKey map[string]any, owner string, leaseUntil string, now string) (bool, error) {
+	c.positionWrites++
+	return c.MemoryDynamoDBClient.PutItemIfOtherItemLeaseOwner(ctx, table, item, conditionTable, conditionKey, owner, leaseUntil, now)
+}
+
+type leaseLosingTrackDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	positionWrites          int
+	loseAfterPositionWrites int
+}
+
+func (c *leaseLosingTrackDynamoDBClient) PutItemCollectionIfLeaseOwner(ctx context.Context, table string, item map[string]any, extraTable string, extraItems []map[string]any, owner string, leaseUntil string, now string) (bool, error) {
+	c.positionWrites += len(extraItems)
+	if c.positionWrites >= c.loseAfterPositionWrites {
+		c.stealLease(table, stringValue(item["flightId"]))
+	}
+	return c.MemoryDynamoDBClient.PutItemCollectionIfLeaseOwner(ctx, table, item, extraTable, extraItems, owner, leaseUntil, now)
+}
+
+func (c *leaseLosingTrackDynamoDBClient) PutItemIfOtherItemLeaseOwner(ctx context.Context, table string, item map[string]any, conditionTable string, conditionKey map[string]any, owner string, leaseUntil string, now string) (bool, error) {
+	c.positionWrites++
+	if c.positionWrites >= c.loseAfterPositionWrites {
+		c.stealLease(conditionTable, stringValue(conditionKey["flightId"]))
+	}
+	return c.MemoryDynamoDBClient.PutItemIfOtherItemLeaseOwner(ctx, table, item, conditionTable, conditionKey, owner, leaseUntil, now)
+}
+
+func (c *leaseLosingTrackDynamoDBClient) stealLease(table string, flightID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	item := c.tables[table][flightID]
+	if item == nil {
+		return
+	}
+	item["fetchOwner"] = "worker-2"
+	item["fetchLeaseUntil"] = "2026-04-29T00:15:00Z"
+}
+
+type observingTrackWriteDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	repo               *DynamoDBRepository
+	ctx                context.Context
+	positionWrites     int
+	visibleDuringWrite int
+}
+
+func (c *observingTrackWriteDynamoDBClient) PutItemIfOtherItemLeaseOwner(ctx context.Context, table string, item map[string]any, conditionTable string, conditionKey map[string]any, owner string, leaseUntil string, now string) (bool, error) {
+	updated, err := c.MemoryDynamoDBClient.PutItemIfOtherItemLeaseOwner(ctx, table, item, conditionTable, conditionKey, owner, leaseUntil, now)
+	if err != nil || !updated {
+		return updated, err
+	}
+	c.positionWrites++
+	if c.positionWrites == 10 {
+		history, _, err := c.repo.ListPositions(c.ctx, domain.FlightID(stringValue(conditionKey["flightId"])), nil, 200)
+		if err != nil {
+			return false, err
+		}
+		c.visibleDuringWrite = len(history)
+	}
+	return updated, nil
+}
+
+type leaseLosingFlightTokenCleanupDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	publishedLargeTrackToken bool
+	lostCleanupLease         bool
+}
+
+func (c *leaseLosingFlightTokenCleanupDynamoDBClient) PutItemIfLeaseOwner(ctx context.Context, table string, item map[string]any, owner string, leaseUntil string, now string) (bool, error) {
+	if table == "Flights" && stringValue(item[committedPositionWriteTokenAttribute]) != "" {
+		c.publishedLargeTrackToken = true
+		return c.MemoryDynamoDBClient.PutItemIfLeaseOwner(ctx, table, item, owner, leaseUntil, now)
+	}
+	if table == "Flights" && c.publishedLargeTrackToken && !c.lostCleanupLease && stringValue(item[committedPositionWriteTokenAttribute]) == "" {
+		c.lostCleanupLease = true
+		c.stealLease(table, stringValue(item["flightId"]))
+	}
+	return c.MemoryDynamoDBClient.PutItemIfLeaseOwner(ctx, table, item, owner, leaseUntil, now)
+}
+
+func (c *leaseLosingFlightTokenCleanupDynamoDBClient) stealLease(table string, flightID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	item := c.tables[table][flightID]
+	if item == nil {
+		return
+	}
+	item["fetchOwner"] = "worker-2"
+	item["fetchLeaseUntil"] = "2026-04-29T00:15:00Z"
+}
+
+type cleanupMissingTrackDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	missCleanupOnce bool
+}
+
+func (c *cleanupMissingTrackDynamoDBClient) PutItemIfCurrentAttributesEqual(ctx context.Context, table string, item map[string]any, expected map[string]any) (bool, error) {
+	if table == "FlightPositions" && stringValue(expected[positionWriteTokenAttribute]) != "" && stringValue(item[positionWriteTokenAttribute]) == "" && c.missCleanupOnce {
+		c.missCleanupOnce = false
+		return false, nil
+	}
+	return c.MemoryDynamoDBClient.PutItemIfCurrentAttributesEqual(ctx, table, item, expected)
+}
+
+type staleUsageReadDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	staleItem map[string]any
+}
+
+type staleFlightReadDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	staleNextFlightGet map[string]any
+}
+
+func (c *staleFlightReadDynamoDBClient) GetItem(ctx context.Context, table string, hashName string, hashValue string) (map[string]any, bool, error) {
+	if table == "Flights" && hashName == "flightId" && c.staleNextFlightGet != nil && stringValue(c.staleNextFlightGet["flightId"]) == hashValue {
+		item := cloneItem(c.staleNextFlightGet)
+		c.staleNextFlightGet = nil
+		return item, true, nil
+	}
+	return c.MemoryDynamoDBClient.GetItem(ctx, table, hashName, hashValue)
+}
+
+func (c *staleUsageReadDynamoDBClient) PutItem(ctx context.Context, table string, item map[string]any) error {
+	if table == "UsageBudget" {
+		c.staleItem = cloneItem(item)
+	}
+	return c.MemoryDynamoDBClient.PutItem(ctx, table, item)
+}
+
+func (c *staleUsageReadDynamoDBClient) AddUsageEstimate(ctx context.Context, table string, budgetScope string, defaults map[string]any, delta float64) (map[string]any, error) {
+	return c.MemoryDynamoDBClient.AddUsageEstimate(ctx, table, budgetScope, defaults, delta)
+}
+
+func (c *staleUsageReadDynamoDBClient) GetItem(ctx context.Context, table string, hashName string, hashValue string) (map[string]any, bool, error) {
+	if table == "UsageBudget" && hashName == "budgetScope" && hashValue == "dev#2026-04" && c.staleItem != nil {
+		return cloneItem(c.staleItem), true, nil
+	}
+	return c.MemoryDynamoDBClient.GetItem(ctx, table, hashName, hashValue)
+}
+
+type concurrentUsageReconcileDynamoDBClient struct {
+	*MemoryDynamoDBClient
+	raiseCostBeforeNextReconcileWrite bool
+}
+
+func (c *concurrentUsageReconcileDynamoDBClient) PutItem(ctx context.Context, table string, item map[string]any) error {
+	if c.raiseCostBeforeNextReconcileWrite && table == "UsageBudget" && numberValue(item["estimatedMonthToDateCost"]) == 4.25 {
+		c.raiseCostBeforeNextReconcileWrite = false
+		current := cloneItem(item)
+		current["estimatedMonthToDateCost"] = 5.00
+		if err := c.MemoryDynamoDBClient.PutItem(ctx, table, current); err != nil {
+			return err
+		}
+	}
+	return c.MemoryDynamoDBClient.PutItem(ctx, table, item)
+}
+
+func (c *concurrentUsageReconcileDynamoDBClient) PutUsageEstimateIfHigher(ctx context.Context, table string, budgetScope string, defaults map[string]any, estimate float64) (map[string]any, bool, error) {
+	if c.raiseCostBeforeNextReconcileWrite {
+		c.raiseCostBeforeNextReconcileWrite = false
+		current, ok, err := c.MemoryDynamoDBClient.GetItem(ctx, table, "budgetScope", budgetScope)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			current = map[string]any{"budgetScope": budgetScope}
+		}
+		current["estimatedMonthToDateCost"] = 5.00
+		if err := c.MemoryDynamoDBClient.PutItem(ctx, table, current); err != nil {
+			return nil, false, err
+		}
+	}
+	return c.MemoryDynamoDBClient.PutUsageEstimateIfHigher(ctx, table, budgetScope, defaults, estimate)
+}
+
+func TestDynamoDBRepositoryOmitsNilLeaseAttributes(t *testing.T) {
+	ctx := context.Background()
+	client := NewMemoryDynamoDBClient()
+	repo := NewDynamoDBRepository(client, DynamoDBTables{Flights: "Flights"})
+	flight := testFlight("iflg_nil_lease", "ANA110")
+
+	if err := repo.PutFlight(ctx, flight); err != nil {
+		t.Fatalf("PutFlight() error = %v", err)
+	}
+
+	item, ok, err := client.GetItem(ctx, "Flights", "flightId", string(flight.FlightID))
+	if err != nil {
+		t.Fatalf("GetItem() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("stored flight not found")
+	}
+	if _, ok := item["fetchLeaseUntil"]; ok {
+		t.Fatalf("fetchLeaseUntil stored for nil lease: %#v", item["fetchLeaseUntil"])
+	}
+	if _, ok := item["fetchOwner"]; ok {
+		t.Fatalf("fetchOwner stored for nil lease: %#v", item["fetchOwner"])
 	}
 }
 
