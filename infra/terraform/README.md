@@ -8,9 +8,15 @@ AWS resources are managed with Terraform. Lambda and Next.js build artifacts are
 - `envs/dev`: implemented personal demo environment
 - `envs/stg`: staging root with backend, provider, variable, and output configuration only
 - `envs/prod`: production root with backend, provider, variable, and output configuration only
-- `modules`: Reusable modules
+- `modules`: Reusable modules with native `terraform test` coverage under each module's `tests/` directory
 
 Only the dev environment currently declares resources. The stg and prod roots keep only the files required to validate environment naming, backend keys, variables, and CI paths without implying deployable staging or production infrastructure.
+
+Reusable modules declare their own Terraform and AWS provider requirements so they can be initialized and tested directly. Module-level tests use Terraform's mock provider to inspect interpreted plan/apply values without requiring AWS credentials or creating AWS resources.
+
+The stg and prod roots also carry native `terraform test` coverage under `tests/` to prove their default environment output and reject cross-environment variable values. Vitest HCL contract tests keep their placeholder shape explicit: provider, backend, variables, and outputs only, with no resources, data sources, or modules until deployable staging or production infrastructure is intentionally introduced.
+
+The dev root carries native plan-based tests in addition to Vitest HCL contract tests. IAM policy semantic tests decode Terraform-rendered policy JSON to guard service boundaries without changing the services contract: API must not read secret values, only the fetcher can read the FlightAware secret value, dispatcher has no S3 or Secrets Manager permissions, and SQS/DynamoDB permissions remain scoped to module outputs. Dev plan-value tests also assert the default and opt-in FlightAware runtime flags, secret-reference-only outputs, and the `airpath-dev-*` naming policy for planned Lambda, data, storage, and eventing outputs.
 
 ## Naming And Secrets
 
@@ -42,11 +48,28 @@ Apply bootstrap from a trusted administrator session before configuring remote s
 ```sh
 make terraform-fmt
 make terraform-lint
+make terraform-policy
 make terraform-validate
+make terraform-test
 make terraform-check
 ```
 
-`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`.
+`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. Checkov is used for selected security policy checks through `make terraform-policy`; the script uses `checkov` from `PATH` or the pinned `.checkov-version` through `uvx`. Repository-specific security policy tests live under `infra/terraform/security-policy/`. `make terraform-test` initializes the dev root, the stg/prod placeholder roots, and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
+
+The Checkov baseline is intentionally narrow and enforced by `.checkov.yml`: S3 public access controls, S3 encryption, SQS encryption, and S3 public access block attachment. Repository-specific Vitest policy tests cover the Airpath-specific pieces that generic scanners cannot model cleanly: no Terraform-managed Secrets Manager secret values and no wildcard IAM resource policies outside the explicit bootstrap exceptions.
+
+### Sandbox Apply/Destroy Integration Test
+
+The dev root also has an opt-in sandbox AWS apply/destroy integration test:
+
+```sh
+make lambda-artifacts
+AIRPATH_TERRAFORM_SANDBOX_APPLY_DESTROY=1 pnpm exec vitest run infra/terraform/envs/dev/sandbox-apply-destroy.test.ts
+```
+
+This test is skipped by default and is intended for manual, nightly, or release-before-deploy validation in a disposable sandbox AWS account. It runs `terraform apply`, checks safe Terraform outputs for Lambda, HTTP API, SQS, DynamoDB, S3, CloudWatch, and Secrets Manager references, checks `terraform state list` for the expected live resource types, then runs `terraform destroy` against the same temporary local state path.
+
+Use `AIRPATH_TERRAFORM_SANDBOX_TFVARS=/absolute/path/to/terraform.tfvars` when the sandbox run needs non-default dev inputs. Do not provide raw API keys through Terraform variables, tfvars files, outputs, or state. The FlightAware API key value must remain managed outside Terraform; Terraform receives only the Secrets Manager secret name and emits only the secret ARN reference.
 
 ## Dev Personal Demo
 
@@ -60,4 +83,8 @@ The dev root owns the deployed runtime contract for the Go services:
 - Fetcher Lambda: SQS event source mapping with `ReportBatchItemFailures`, DynamoDB lease/cache/position/usage writes, S3 route and track artifact writes, Secrets Manager read access for the FlightAware API key, and diagnostic SQS send access.
 - Dispatcher Lambda: EventBridge schedule, due-poll DynamoDB reads and updates, fetch-task idempotency reservations, fetch task SQS send access, and the runtime queue/table environment variables required by `services/internal/runtimewiring`.
 
+Fetch task SQS queues use SQS-managed server-side encryption. This changes AWS queue storage policy only; Lambda event source mapping, queue URLs, and service environment variable names stay unchanged.
+
 The dispatcher uses `DISPATCHER_ASSUME_ACTIVE_VIEWER=true` in dev so the personal demo can enqueue due polling tasks without a separate viewer activity signal. Staging and production should revisit that input when they introduce a real activity source.
+
+The dev root also validates environment-specific deployment inputs before planning resources. It rejects non-dev environment names, non-positive GeoJSON artifact retention, and non-positive fetch-task DLQ receive thresholds. Its native Terraform tests decode rendered IAM policy JSON and inspect planned module output values to keep API, fetcher, and dispatcher permissions, FlightAware opt-in flags, secret references, and naming aligned with their runtime responsibilities. The `compute-lambda` module exposes planned environment variables as module metadata so root tests can inspect the interpreted plan without adding root outputs or changing the services contract. Module tests cover reusable contracts where the input belongs to a module.

@@ -32,6 +32,11 @@ variable "fetch_task_max_receive_count" {
   description = "Number of receive attempts before a fetch task is moved to the DLQ."
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.fetch_task_max_receive_count >= 1
+    error_message = "fetch_task_max_receive_count must be at least 1."
+  }
 }
 
 variable "tags" {

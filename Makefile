@@ -4,7 +4,7 @@ SHELL := /bin/bash
 GO := env -u GOROOT go
 TERRAFORM ?= terraform
 
-.PHONY: help lint test build check format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-check workflow-lint ci
+.PHONY: help lint test build check format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-test terraform-policy terraform-check workflow-lint ci
 .PHONY: pnpm-install pnpm-lint pnpm-typecheck pnpm-test pnpm-build go-fmt go-vet go-test go-build go-lint
 .PHONY: ci-ts ci-go ci-terraform
 
@@ -18,7 +18,9 @@ help:
 		'  make ci                Run the pull request gate locally' \
 		'  make lambda-artifacts  Build dev Lambda zip artifacts' \
 		'  make format            Format supported files' \
-		'  make terraform-check   Run Terraform fmt, validate, and lint'
+		'  make terraform-test    Run native Terraform module and root tests' \
+		'  make terraform-policy  Run Terraform security policy checks' \
+		'  make terraform-check   Run Terraform fmt, validate, test, lint, and policy'
 
 pnpm-install:
 	pnpm install --frozen-lockfile
@@ -92,10 +94,37 @@ terraform-fmt:
 terraform-lint:
 	bash scripts/ci/terraform-lint.sh
 
+terraform-policy:
+	bash scripts/ci/terraform-policy.sh
+
 terraform-validate:
 	TERRAFORM="$(TERRAFORM)" bash scripts/ci/terraform-validate.sh
+
+terraform-test:
+	$(TERRAFORM) -chdir=infra/terraform/envs/dev init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/envs/dev test
+	$(TERRAFORM) -chdir=infra/terraform/envs/stg init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/envs/stg test
+	$(TERRAFORM) -chdir=infra/terraform/envs/prod init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/envs/prod test
+	$(TERRAFORM) -chdir=infra/terraform/modules/api-http init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/api-http test
+	$(TERRAFORM) -chdir=infra/terraform/modules/compute-lambda init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/compute-lambda test
+	$(TERRAFORM) -chdir=infra/terraform/modules/data-dynamodb init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/data-dynamodb test
+	$(TERRAFORM) -chdir=infra/terraform/modules/eventing init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/eventing test
+	$(TERRAFORM) -chdir=infra/terraform/modules/observability init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/observability test
+	$(TERRAFORM) -chdir=infra/terraform/modules/secrets init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/secrets test
+	$(TERRAFORM) -chdir=infra/terraform/modules/storage-s3 init -backend=false -input=false
+	$(TERRAFORM) -chdir=infra/terraform/modules/storage-s3 test
 
 terraform-check:
 	$(MAKE) terraform-fmt
 	$(MAKE) terraform-validate
+	$(MAKE) terraform-test
 	$(MAKE) terraform-lint
+	$(MAKE) terraform-policy

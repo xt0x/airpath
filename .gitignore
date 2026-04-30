@@ -23,6 +23,7 @@ coverage.out
 # Terraform
 artifacts/
 **/.terraform/
+infra/terraform/modules/**/.terraform.lock.hcl
 *.tfplan
 *.tfstate
 *.tfstate.*

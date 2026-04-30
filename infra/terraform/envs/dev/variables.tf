@@ -43,12 +43,22 @@ variable "geojson_artifact_retention_days" {
   description = "Number of days to retain dev route and track GeoJSON artifacts."
   type        = number
   default     = 30
+
+  validation {
+    condition     = var.geojson_artifact_retention_days >= 1
+    error_message = "geojson_artifact_retention_days must be at least 1."
+  }
 }
 
 variable "fetch_task_max_receive_count" {
   description = "Number of receive attempts before a fetch task moves to the DLQ."
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.fetch_task_max_receive_count >= 1
+    error_message = "fetch_task_max_receive_count must be at least 1."
+  }
 }
 
 variable "allow_real_flightaware_calls" {
