@@ -81,6 +81,192 @@ func TestDispatcherSelectsDueFlightsOnlyWhenBudgetAllows(t *testing.T) {
 	}
 }
 
+func TestDispatcherEnqueuesDueTasksBeforeRefreshingActivitySchedule(t *testing.T) {
+	ctx := context.Background()
+	now := mustTime(t, "2026-04-29T00:00:00Z")
+	due := testFlight("iflg_due_activity", "ANA110")
+	due.NextPositionPollAt = ptr("2026-04-28T23:59:00Z")
+	flights := &memoryPollFlightStore{flights: map[domain.FlightID]domain.Flight{
+		due.FlightID: due,
+	}}
+	queue := &memoryFetchTaskQueue{}
+	dispatcher := NewPollingDispatcher(PollingDispatcherConfig{
+		Flights:    flights,
+		Activities: memoryPollActivityStore{signal: PollActivitySignal{ActiveViewer: true}},
+		FetchTasks: queue,
+		UsageGuard: &memoryUsageGuard{fetchingEnabled: true},
+	})
+
+	result, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: now, Limit: 10})
+	if err != nil {
+		t.Fatalf("Dispatch() error = %v", err)
+	}
+	if result.EnqueuedTasks != 1 || len(queue.tasks) != 1 {
+		t.Fatalf("dispatch result = %#v tasks=%#v, want due task enqueued before schedule refresh", result, queue.tasks)
+	}
+	updated := flights.flights[due.FlightID]
+	assertTimePtr(t, updated.NextPositionPollAt, "2026-04-29T00:15:00Z")
+}
+
+func TestDispatcherDoesNotAdvanceDueScheduleWhenEnqueueFails(t *testing.T) {
+	ctx := context.Background()
+	now := mustTime(t, "2026-04-29T00:00:00Z")
+	due := testFlight("iflg_due_enqueue_fails", "ANA110")
+	due.NextPositionPollAt = ptr("2026-04-28T23:59:00Z")
+	flights := &memoryPollFlightStore{flights: map[domain.FlightID]domain.Flight{
+		due.FlightID: due,
+	}}
+	queue := &memoryFetchTaskQueue{enqueueErr: errQueueUnavailable()}
+	dispatcher := NewPollingDispatcher(PollingDispatcherConfig{
+		Flights:    flights,
+		Activities: memoryPollActivityStore{signal: PollActivitySignal{ActiveViewer: true}},
+		FetchTasks: queue,
+		UsageGuard: &memoryUsageGuard{fetchingEnabled: true},
+	})
+
+	_, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: now, Limit: 10})
+	if err == nil {
+		t.Fatal("Dispatch() error = nil, want enqueue failure")
+	}
+	updated := flights.flights[due.FlightID]
+	assertTimePtr(t, updated.NextPositionPollAt, "2026-04-28T23:59:00Z")
+}
+
+func TestDispatcherDoesNotAdvanceDueScheduleWhenPolicyBlocksDueTask(t *testing.T) {
+	ctx := context.Background()
+	now := mustTime(t, "2026-04-29T00:00:00Z")
+	due := testFlight("iflg_due_policy_blocks", "ANA110")
+	due.NextRoutePollAt = ptr("2026-04-28T23:59:00Z")
+	flights := &memoryPollFlightStore{flights: map[domain.FlightID]domain.Flight{
+		due.FlightID: due,
+	}}
+	dispatcher := NewPollingDispatcher(PollingDispatcherConfig{
+		Flights:    flights,
+		Activities: memoryPollActivityStore{signal: PollActivitySignal{ActiveViewer: true}},
+		FetchTasks: &memoryFetchTaskQueue{},
+		UsageGuard: &memoryUsageGuard{fetchingEnabled: true},
+		FetchPolicy: NewRuntimeFetchPolicy(RuntimeFetchConfig{
+			ExternalFetchEnabled:   true,
+			RouteFetchEnabled:      false,
+			TrackFetchEnabled:      true,
+			BackgroundFetchEnabled: true,
+		}),
+	})
+
+	result, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: now, Limit: 10})
+	if err != nil {
+		t.Fatalf("Dispatch() error = %v", err)
+	}
+	if result.EnqueuedTasks != 0 {
+		t.Fatalf("EnqueuedTasks = %d, want none while route fetch is disabled", result.EnqueuedTasks)
+	}
+	updated := flights.flights[due.FlightID]
+	assertTimePtr(t, updated.NextRoutePollAt, "2026-04-28T23:59:00Z")
+}
+
+func TestDispatcherAdvancesAllowedDueScheduleWhenAnotherTaskIsPolicyBlocked(t *testing.T) {
+	ctx := context.Background()
+	now := mustTime(t, "2026-04-29T00:00:00Z")
+	due := testFlight("iflg_due_policy_blocks_route_only", "ANA110")
+	due.NextPositionPollAt = ptr("2026-04-28T23:58:00Z")
+	due.NextRoutePollAt = ptr("2026-04-28T23:59:00Z")
+	flights := &memoryPollFlightStore{flights: map[domain.FlightID]domain.Flight{
+		due.FlightID: due,
+	}}
+	queue := &memoryFetchTaskQueue{}
+	dispatcher := NewPollingDispatcher(PollingDispatcherConfig{
+		Flights:    flights,
+		Activities: memoryPollActivityStore{signal: PollActivitySignal{ActiveViewer: true}},
+		FetchTasks: queue,
+		UsageGuard: &memoryUsageGuard{fetchingEnabled: true},
+		FetchPolicy: NewRuntimeFetchPolicy(RuntimeFetchConfig{
+			ExternalFetchEnabled:   true,
+			RouteFetchEnabled:      false,
+			TrackFetchEnabled:      true,
+			BackgroundFetchEnabled: true,
+		}),
+	})
+
+	result, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: now, Limit: 10})
+	if err != nil {
+		t.Fatalf("Dispatch() error = %v", err)
+	}
+	if result.EnqueuedTasks != 1 || len(queue.tasks) != 1 {
+		t.Fatalf("dispatch result = %#v tasks=%#v, want one allowed position task", result, queue.tasks)
+	}
+	if queue.tasks[0].TaskType != FetchTaskPosition {
+		t.Fatalf("queued task type = %q, want position", queue.tasks[0].TaskType)
+	}
+	updated := flights.flights[due.FlightID]
+	assertTimePtr(t, updated.NextPositionPollAt, "2026-04-29T00:15:00Z")
+	assertTimePtr(t, updated.NextRoutePollAt, "2026-04-28T23:59:00Z")
+}
+
+func TestDispatcherUsesDueTimeForPollTaskIdempotencyAcrossTicks(t *testing.T) {
+	ctx := context.Background()
+	firstTick := mustTime(t, "2026-04-29T00:00:00Z")
+	secondTick := mustTime(t, "2026-04-29T00:01:00Z")
+	due := testFlight("iflg_due_stable_key", "ANA110")
+	due.NextPositionPollAt = ptr("2026-04-28T23:59:00Z")
+	flights := &memoryPollFlightStore{flights: map[domain.FlightID]domain.Flight{
+		due.FlightID: due,
+	}}
+	queue := &memoryFetchTaskQueue{}
+	dispatcher := NewPollingDispatcher(PollingDispatcherConfig{
+		Flights:    flights,
+		FetchTasks: queue,
+		UsageGuard: &memoryUsageGuard{fetchingEnabled: true},
+	})
+
+	first, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: firstTick, Limit: 10})
+	if err != nil {
+		t.Fatalf("first Dispatch() error = %v", err)
+	}
+	second, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: secondTick, Limit: 10})
+	if err != nil {
+		t.Fatalf("second Dispatch() error = %v", err)
+	}
+
+	if first.EnqueuedTasks != 1 || second.EnqueuedTasks != 0 || len(queue.tasks) != 1 {
+		t.Fatalf("dispatch results first=%#v second=%#v tasks=%#v, want one stable enqueue", first, second, queue.tasks)
+	}
+	wantKey := "poll:iflg_due_stable_key:position:2026-04-28T23:59:00Z"
+	if queue.tasks[0].IdempotencyKey != wantKey || queue.tasks[0].TaskID != wantKey {
+		t.Fatalf("task key/id = %q/%q, want %q", queue.tasks[0].IdempotencyKey, queue.tasks[0].TaskID, wantKey)
+	}
+}
+
+func TestDispatcherDoesNotEnqueueIdleStoppedFlights(t *testing.T) {
+	ctx := context.Background()
+	now := mustTime(t, "2026-04-29T00:20:00Z")
+	due := testFlight("iflg_idle_due", "ANA110")
+	due.IdleSince = ptr("2026-04-29T00:00:00Z")
+	due.NextPositionPollAt = ptr("2026-04-29T00:15:00Z")
+	flights := &memoryPollFlightStore{flights: map[domain.FlightID]domain.Flight{
+		due.FlightID: due,
+	}}
+	queue := &memoryFetchTaskQueue{}
+	dispatcher := NewPollingDispatcher(PollingDispatcherConfig{
+		Flights:    flights,
+		Activities: memoryPollActivityStore{signal: PollActivitySignal{}},
+		FetchTasks: queue,
+		UsageGuard: &memoryUsageGuard{fetchingEnabled: true},
+	})
+
+	result, err := dispatcher.Dispatch(ctx, DispatchPollInput{Now: now, Limit: 10})
+	if err != nil {
+		t.Fatalf("Dispatch() error = %v", err)
+	}
+
+	if result.EnqueuedTasks != 0 || len(queue.tasks) != 0 {
+		t.Fatalf("dispatch result = %#v tasks=%#v, want no idle tasks", result, queue.tasks)
+	}
+	updated := flights.flights[due.FlightID]
+	if updated.PollState == nil || *updated.PollState != domain.FlightPollStateCompleted {
+		t.Fatalf("poll state = %v, want completed", updated.PollState)
+	}
+}
+
 func TestFetchProcessorUsesFlightLeaseToPreventDuplicateFlightAwareCalls(t *testing.T) {
 	ctx := context.Background()
 	now := mustTime(t, "2026-04-29T00:00:00Z")
@@ -299,6 +485,14 @@ func (s *memoryPollFlightStore) ListPollableFlights(_ context.Context, _ string,
 func (s *memoryPollFlightStore) UpdatePollSchedule(_ context.Context, flight domain.Flight) error {
 	s.flights[flight.FlightID] = flight
 	return nil
+}
+
+type memoryPollActivityStore struct {
+	signal PollActivitySignal
+}
+
+func (s memoryPollActivityStore) ActivityForFlight(context.Context, domain.FlightID) (PollActivitySignal, error) {
+	return s.signal, nil
 }
 
 type memoryFetchFlightStore struct {
