@@ -8,8 +8,8 @@ func TestLoadFlightAwareRuntimeConfigDefaultsToDisabledPersonalDemo(t *testing.T
 		t.Fatalf("LoadFlightAwareRuntimeConfig() error = %v", err)
 	}
 
-	if config.Environment != "" {
-		t.Fatalf("Environment = %q, want empty", config.Environment)
+	if config.Environment != DefaultEnvironment {
+		t.Fatalf("Environment = %q, want %q", config.Environment, DefaultEnvironment)
 	}
 	if config.FetchEnabled {
 		t.Fatal("FetchEnabled = true, want false by default")
@@ -22,6 +22,16 @@ func TestLoadFlightAwareRuntimeConfigDefaultsToDisabledPersonalDemo(t *testing.T
 	}
 	if config.PersonalDemoNotice != DefaultPersonalDemoNotice {
 		t.Fatalf("PersonalDemoNotice = %q, want default notice", config.PersonalDemoNotice)
+	}
+
+	blankEnvironment, err := LoadFlightAwareRuntimeConfig(mapLookup(map[string]string{
+		AirpathEnvironmentEnv: "   ",
+	}))
+	if err != nil {
+		t.Fatalf("LoadFlightAwareRuntimeConfig(blank environment) error = %v", err)
+	}
+	if blankEnvironment.Environment != DefaultEnvironment {
+		t.Fatalf("blank Environment = %q, want %q", blankEnvironment.Environment, DefaultEnvironment)
 	}
 }
 
