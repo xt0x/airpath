@@ -4,7 +4,7 @@ SHELL := /bin/bash
 GO := env -u GOROOT go
 TERRAFORM ?= terraform
 
-.PHONY: help lint test build check format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-test terraform-check workflow-lint ci
+.PHONY: help lint test build check format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-test terraform-policy terraform-check workflow-lint ci
 .PHONY: pnpm-install pnpm-lint pnpm-typecheck pnpm-test pnpm-build go-fmt go-vet go-test go-build go-lint
 .PHONY: ci-ts ci-go ci-terraform
 
@@ -19,7 +19,8 @@ help:
 		'  make lambda-artifacts  Build dev Lambda zip artifacts' \
 		'  make format            Format supported files' \
 		'  make terraform-test    Run native Terraform module and root tests' \
-		'  make terraform-check   Run Terraform fmt, validate, test, and lint'
+		'  make terraform-policy  Run Terraform security policy checks' \
+		'  make terraform-check   Run Terraform fmt, validate, test, lint, and policy'
 
 pnpm-install:
 	pnpm install --frozen-lockfile
@@ -93,6 +94,9 @@ terraform-fmt:
 terraform-lint:
 	bash scripts/ci/terraform-lint.sh
 
+terraform-policy:
+	bash scripts/ci/terraform-policy.sh
+
 terraform-validate:
 	TERRAFORM="$(TERRAFORM)" bash scripts/ci/terraform-validate.sh
 
@@ -123,3 +127,4 @@ terraform-check:
 	$(MAKE) terraform-validate
 	$(MAKE) terraform-test
 	$(MAKE) terraform-lint
+	$(MAKE) terraform-policy

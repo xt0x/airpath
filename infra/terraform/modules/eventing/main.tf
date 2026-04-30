@@ -1,6 +1,7 @@
 resource "aws_sqs_queue" "fetch_task_dlq" {
   name                      = "${var.name_prefix}-fetch-task-dlq"
   message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
 
   tags = var.tags
 }
@@ -9,6 +10,7 @@ resource "aws_sqs_queue" "fetch_task" {
   name                       = "${var.name_prefix}-fetch-task"
   visibility_timeout_seconds = 60
   message_retention_seconds  = 1209600
+  sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.fetch_task_dlq.arn

@@ -1,0 +1,17 @@
+compact: true
+quiet: true
+directory:
+  - infra/terraform
+framework:
+  - terraform
+  - secrets
+check:
+  - CKV_AWS_19
+  - CKV_AWS_20
+  - CKV_AWS_27
+  - CKV_AWS_53
+  - CKV_AWS_54
+  - CKV_AWS_55
+  - CKV_AWS_56
+  - CKV_AWS_57
+  - CKV2_AWS_6

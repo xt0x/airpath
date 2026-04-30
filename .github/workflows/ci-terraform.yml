@@ -21,8 +21,12 @@ jobs:
 
       - uses: terraform-linters/setup-tflint@v4
 
+      - uses: astral-sh/setup-uv@v5
+
       - run: make terraform-fmt
 
       - run: make terraform-validate
 
       - run: make terraform-lint
+
+      - run: make terraform-policy

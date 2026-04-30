@@ -48,12 +48,15 @@ Apply bootstrap from a trusted administrator session before configuring remote s
 ```sh
 make terraform-fmt
 make terraform-lint
+make terraform-policy
 make terraform-validate
 make terraform-test
 make terraform-check
 ```
 
-`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes the dev root, the stg/prod placeholder roots, and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
+`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. Checkov is used for selected security policy checks through `make terraform-policy`; the script uses `checkov` from `PATH` or the pinned `.checkov-version` through `uvx`. `make terraform-test` initializes the dev root, the stg/prod placeholder roots, and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
+
+The Checkov baseline is intentionally narrow and enforced by `.checkov.yml`: S3 public access controls, S3 encryption, SQS encryption, and S3 public access block attachment. Repository-specific Vitest policy tests cover the Airpath-specific pieces that generic scanners cannot model cleanly: no Terraform-managed Secrets Manager secret values and no wildcard IAM resource policies outside the explicit bootstrap exceptions.
 
 ### Sandbox Apply/Destroy Integration Test
 
@@ -79,6 +82,8 @@ The dev root owns the deployed runtime contract for the Go services:
 - API Lambda: HTTP API integration, DynamoDB cache and usage tables, S3 GeoJSON artifacts, fetch task enqueue permission, and the FlightAware secret ARN environment reference.
 - Fetcher Lambda: SQS event source mapping with `ReportBatchItemFailures`, DynamoDB lease/cache/position/usage writes, S3 route and track artifact writes, Secrets Manager read access for the FlightAware API key, and diagnostic SQS send access.
 - Dispatcher Lambda: EventBridge schedule, due-poll DynamoDB reads and updates, fetch-task idempotency reservations, fetch task SQS send access, and the runtime queue/table environment variables required by `services/internal/runtimewiring`.
+
+Fetch task SQS queues use SQS-managed server-side encryption. This changes AWS queue storage policy only; Lambda event source mapping, queue URLs, and service environment variable names stay unchanged.
 
 The dispatcher uses `DISPATCHER_ASSUME_ACTIVE_VIEWER=true` in dev so the personal demo can enqueue due polling tasks without a separate viewer activity signal. Staging and production should revisit that input when they introduce a real activity source.
 

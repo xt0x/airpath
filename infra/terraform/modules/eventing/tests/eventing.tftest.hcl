@@ -60,6 +60,14 @@ run "plans_fetch_task_queue_and_dispatcher_schedule" {
 
   assert {
     condition = (
+      aws_sqs_queue.fetch_task.sqs_managed_sse_enabled == true &&
+      aws_sqs_queue.fetch_task_dlq.sqs_managed_sse_enabled == true
+    )
+    error_message = "Fetch task queues must use SQS-managed server-side encryption."
+  }
+
+  assert {
+    condition = (
       aws_lambda_event_source_mapping.fetcher.function_name == "arn:aws:lambda:us-east-1:123456789012:function:airpath-test-fetcher" &&
       aws_lambda_event_source_mapping.fetcher.batch_size == 1 &&
       aws_lambda_event_source_mapping.fetcher.function_response_types == toset(["ReportBatchItemFailures"]) &&

@@ -10,7 +10,7 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 - `modules/api-http` owns HTTP API v2 routing to the API Lambda.
 - `modules/compute-lambda` owns Lambda execution roles, basic logging, inline least-privilege policy attachment, runtime settings, artifact references, and environment variables. It exposes planned environment variables as module output metadata for root-level Terraform plan tests; root outputs still expose only environment-appropriate deployment metadata.
 - `modules/data-dynamodb` owns flight cache, lookup/idempotency, position history, and usage budget tables.
-- `modules/eventing` owns the fetch task queue, DLQ, fetcher SQS event source mapping, dispatcher schedule, EventBridge invoke permission, and queue-consume permissions.
+- `modules/eventing` owns the encrypted fetch task queue, encrypted DLQ, fetcher SQS event source mapping, dispatcher schedule, EventBridge invoke permission, and queue-consume permissions.
 - `modules/storage-s3` owns route and track GeoJSON artifact storage.
 - `modules/secrets` owns Secrets Manager secret metadata only. Secret values are created or rotated outside Terraform state.
 - `modules/observability` owns dashboards and CloudWatch alarms for Lambda, SQS, FlightAware, and budget signals.
@@ -20,6 +20,8 @@ Each reusable module declares its own Terraform and AWS provider requirements an
 The staging and production roots are intentionally non-deployable placeholders. Their tests are contract guards: they prove the root owns exactly one environment name, retain backend wiring as a bootstrap placeholder, expose only the `environment` output, and fail if deployable Terraform blocks are added without updating the environment design.
 
 The dev root includes a sandbox apply/destroy integration test for manual, nightly, or release-before-deploy validation. It is explicitly opt-in because it creates live AWS resources. The test uses temporary local Terraform state, applies the dev root in a sandbox AWS account, verifies only safe output metadata for Lambda, HTTP API, SQS, DynamoDB, S3, CloudWatch, and Secrets Manager references, checks Terraform state for the expected live resource types, and then destroys the same state. It does not introduce a service-side contract change: runtime code still receives the existing environment variables and secret references, and raw secret values remain outside Terraform.
+
+Terraform security policy scanning is split between Checkov and repository-specific Vitest contract tests. Checkov runs from `.checkov.yml` through `make terraform-policy` and CI, enforcing the selected baseline for S3 public-access controls, S3 encryption, SQS encryption, and public access block attachment. `infra/terraform/security-policy.test.ts` keeps scanner wiring in the Terraform check path, prevents Terraform-managed Secrets Manager secret values, and limits wildcard IAM resources to the bootstrap key administration policy and the read-only plan discovery policy.
 
 ## Runtime Contract
 
