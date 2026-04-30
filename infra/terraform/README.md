@@ -8,9 +8,11 @@ AWS resources are managed with Terraform. Lambda and Next.js build artifacts are
 - `envs/dev`: implemented personal demo environment
 - `envs/stg`: staging root with backend, provider, variable, and output configuration only
 - `envs/prod`: production root with backend, provider, variable, and output configuration only
-- `modules`: Reusable modules
+- `modules`: Reusable modules with native `terraform test` coverage under each module's `tests/` directory
 
 Only the dev environment currently declares resources. The stg and prod roots keep only the files required to validate environment naming, backend keys, variables, and CI paths without implying deployable staging or production infrastructure.
+
+Reusable modules declare their own Terraform and AWS provider requirements so they can be initialized and tested directly. Module-level tests use Terraform's mock provider to inspect interpreted plan/apply values without requiring AWS credentials or creating AWS resources.
 
 ## Naming And Secrets
 
@@ -43,10 +45,11 @@ Apply bootstrap from a trusted administrator session before configuring remote s
 make terraform-fmt
 make terraform-lint
 make terraform-validate
+make terraform-test
 make terraform-check
 ```
 
-`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`.
+`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. `make terraform-test` initializes each reusable module with `-backend=false` and runs its native `.tftest.hcl` files. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
 
 ## Dev Personal Demo
 

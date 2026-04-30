@@ -15,6 +15,8 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 - `modules/secrets` owns Secrets Manager secret metadata only. Secret values are created or rotated outside Terraform state.
 - `modules/observability` owns dashboards and CloudWatch alarms for Lambda, SQS, FlightAware, and budget signals.
 
+Each reusable module declares its own Terraform and AWS provider requirements and carries native Terraform tests in `tests/*.tftest.hcl`. These tests use Terraform mock providers so module contracts are checked through Terraform-interpreted plan/apply values without AWS credentials or live AWS resources.
+
 ## Runtime Contract
 
 The dev root mirrors the runtime contract consumed by `services/internal/runtimewiring` and the Lambda entrypoints.
