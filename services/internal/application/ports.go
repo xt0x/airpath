@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
 	"airpath/services/internal/domain"
 )
@@ -18,6 +20,7 @@ type MapDataStore interface {
 
 type PositionStore interface {
 	GetLatestPosition(context.Context, domain.FlightID) (*domain.FlightPosition, CacheMetadata, error)
+	ListPositions(context.Context, domain.FlightID, *string, int) ([]domain.FlightPosition, CacheMetadata, error)
 }
 
 type FetchTaskQueue interface {
@@ -52,6 +55,11 @@ type Application struct {
 }
 
 func New(config Config) *Application {
+	mustProvide("Application.Config.Flights", config.Flights)
+	mustProvide("Application.Config.MapData", config.MapData)
+	mustProvide("Application.Config.Positions", config.Positions)
+	mustProvide("Application.Config.FetchTasks", config.FetchTasks)
+	mustProvide("Application.Config.UsageGuard", config.UsageGuard)
 	return &Application{
 		flights:     config.Flights,
 		mapData:     config.MapData,
@@ -59,5 +67,18 @@ func New(config Config) *Application {
 		fetchTasks:  config.FetchTasks,
 		usageGuard:  config.UsageGuard,
 		fetchPolicy: config.FetchPolicy,
+	}
+}
+
+func mustProvide(name string, value any) {
+	if value == nil {
+		panic(fmt.Sprintf("%s is required", name))
+	}
+	typed := reflect.ValueOf(value)
+	switch typed.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if typed.IsNil() {
+			panic(fmt.Sprintf("%s is required", name))
+		}
 	}
 }

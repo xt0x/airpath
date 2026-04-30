@@ -1,15 +1,20 @@
 # Application Layer Design
 
-The `application` package owns backend use cases that can run without AWS adapters. It depends on domain models and small ports for cached flight data, map artifacts, position history, fetch task enqueueing, and usage guards.
+The `application` package owns backend use cases and worker orchestration that can run without AWS SDK clients or FlightAware transport types. It depends on domain models and small ports for cached flights, map artifacts, position history, fetch task enqueueing, usage guards, fetch policy, polling activity, artifact writes, and diagnostics.
 
-- Search is cache-first. Cache misses can enqueue a bounded summary fetch task only when the usage guard allows fetching.
-- Flight detail assembles cached summary, planned route, actual track, current position, and freshness metadata.
-- Map data assembles route, track, and current-position layers from cached repositories.
-- Refresh requests dedupe task types and enqueue only when the budget/rate guard allows fetching.
-- Refresh task idempotency is based on `flightId`, `taskType`, and a five-minute request window so repeated requests do not create extra upstream fetch work.
-- Runtime fetch policy can disable route, track/final-track, and background polling tasks without changing use case code.
-- When fetching is disabled but cached flight data exists, refresh returns an empty task list with stale cache metadata instead of forcing an upstream fetch error.
-- Usage status returns local accounting and rate-limit state without calling AWS.
-- Usage budget state is normalized around a monthly environment scope and defaults to a USD 4.00 soft stop threshold.
-- Error mapping converts application and FlightAware boundary errors into the shared typed API error schema.
-- F15 polling owns conservative low-frequency scheduling, due-flight dispatch, fetch task execution, flight-level leases, route/track artifact updates, position history appends, idle stop behavior, and safe diagnostic metadata for failed fetch tasks.
+- Public read use cases are cache-first. Search trims and validates identifiers before cache lookup or task enqueueing so cache keys, task IDs, and idempotency keys share the same normalized input. Search, flight detail, map data, position history, refresh, and usage-status responses use application DTOs and hide storage-only state such as leases, poll timestamps, TTLs, and S3 keys.
+- Search cache misses can enqueue one summary fetch task inside a five-minute idempotency window when both the usage guard and runtime fetch policy allow it. Summary fetches are seeded from search misses because they search by ident; refresh requests operate on cached flight IDs.
+- Refresh requests validate task types and public client reasons, reject invalid task/reason combinations, dedupe task types, skip summary tasks, and enqueue only allowed non-summary work for cached flights that already have a `faFlightId`. Provisional flights keep serving cached data instead of entering retry loops.
+- `RuntimeFetchPolicy` is the use-case level FlightAware gate. It has a global external-fetch switch plus route, track/final-track, and background-polling switches. The policy is checked during enqueue and again in workers before taking a lease, so queued work can be skipped after runtime disablement.
+- Usage budget state is normalized around environment/month scope and defaults to a USD 4.00 soft stop threshold. Stopped budgets disable new fetch enqueues, and fetch processors can use the same guard to skip queued tasks before leases or external calls.
+- Application errors map to the shared typed API error schema for validation, budget stop, rate limit, fetch-disabled, stale-cache, not-found, and upstream failure cases.
+- Polling is split by responsibility: `poll_schedule.go` computes conservative low-frequency schedules, `poll_dispatcher.go` finds due work and enqueues tasks, `fetch_processor.go` executes task results, and `fetch_diagnostics.go` records safe failure metadata.
+- Poll schedules use active-viewer/manual-request signals, route/track window flags, a manual keep-alive period, and an idle-stop period. Inactive flights enter an idle grace period before position, route, and track polling are cleared.
+- Poll dispatch computes due tasks from persisted schedule fields, enqueues or observes already-reserved work, and only then advances the task types that succeeded. Enqueue failures and policy-blocked task types keep their due timestamps for retry while other due task types on the same flight may still advance.
+- Fetch processing validates task type, reason, and task/reason compatibility before reporting an external attempt. It checks usage and fetch policy before leases, acquires a flight-level lease before upstream calls, releases leases after processing, and avoids publishing results when a stale worker loses the lease.
+- Summary fetch processing translates valid external search rows into cached domain flights and ident lookups while preserving existing operational fields. Malformed rows are skipped with diagnostics so one bad upstream row does not poison the whole task. Internal FlightAware-backed IDs are stable from upstream flight facts; public `legIndex` still reflects response order.
+- Position, route, and track processing sanitize external data before persistence. Position and track updates preserve available altitude, altitude-change, speed, heading, timestamp, update-type, and source metadata. Track points require finite coordinates and RFC3339 timestamps, dedupe duplicate timestamp strings with the latest accepted point, sort by parsed instant, and use the same validated point set for history and artifacts.
+- Position and track updates require atomic writer ports so cached flight metadata and validated history cannot diverge through fallback writes. Route and track artifacts are written only when enough valid coordinates remain.
+- Fetch processor ports use application-owned external DTOs; FlightAware transport DTOs are translated in adapter code before crossing into this package.
+- Public response DTO JSON fields are tested against the shared TypeScript API contract for names, required/optional status, nullable status, and broad JSON type categories.
+- Constructors fail fast for required ports. Runtime-optional collaborators such as fetch policy, diagnostics, and activity stores remain nullable by design.

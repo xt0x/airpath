@@ -4,7 +4,8 @@ import type {
   InternalFlightLegID,
   ISODateTimeString,
   ProvisionalFlightLegID,
-} from "./index.js";
+} from "./domain-types.js";
+import { hashStableParts } from "./stable-hash.js";
 
 export interface ProvisionalFlightLegIDInput {
   ident: string;
@@ -24,7 +25,7 @@ export interface InternalFlightLegIDInput {
 export function generateProvisionalFlightLegId(
   input: ProvisionalFlightLegIDInput,
 ): ProvisionalFlightLegID {
-  return `sched_${hashFlightIDParts([
+  return `sched_${hashStableParts([
     input.ident,
     input.originCode,
     input.destinationCode,
@@ -33,25 +34,11 @@ export function generateProvisionalFlightLegId(
 }
 
 export function generateInternalFlightLegId(input: InternalFlightLegIDInput): InternalFlightLegID {
-  return `iflg_${hashFlightIDParts([
+  return `iflg_${hashStableParts([
     input.faFlightId,
     input.originCode,
     input.destinationCode,
     input.scheduledOut,
     input.legIndex,
   ])}`;
-}
-
-function hashFlightIDParts(parts: readonly (string | number)[]): string {
-  let hash = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-  const mask = 0xffffffffffffffffn;
-  const bytes = new TextEncoder().encode(parts.map(String).join("\u001f"));
-
-  for (const byte of bytes) {
-    hash ^= BigInt(byte);
-    hash = (hash * prime) & mask;
-  }
-
-  return hash.toString(16).padStart(16, "0").slice(0, 12);
 }

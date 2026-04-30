@@ -3,19 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build",
+    "build:deps": "pnpm --filter @airpath/shared-types build && pnpm --filter @airpath/map-rendering build",
+    "build": "pnpm run build:deps && next build",
     "dev": "next dev",
     "lint": "pnpm run typecheck",
     "start": "next start",
-    "test": "vitest run --passWithNoTests",
+    "test": "pnpm run build:deps && vitest run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit"
+    "typecheck": "pnpm run build:deps && tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@airpath/map-rendering": "workspace:*",
     "@airpath/shared-types": "workspace:*",
-    "@deck.gl/layers": "^9.3.1",
-    "@deck.gl/react": "^9.3.1",
-    "mapbox-gl": "^3.22.0",
     "next": "^16.0.10",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"

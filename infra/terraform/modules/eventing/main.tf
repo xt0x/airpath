@@ -19,15 +19,16 @@ resource "aws_sqs_queue" "fetch_task" {
 }
 
 resource "aws_lambda_event_source_mapping" "fetcher" {
-  event_source_arn = aws_sqs_queue.fetch_task.arn
-  function_name    = var.fetcher_lambda_arn
-  batch_size       = 1
-  enabled          = true
+  event_source_arn        = aws_sqs_queue.fetch_task.arn
+  function_name           = var.fetcher_lambda_arn
+  batch_size              = 1
+  function_response_types = ["ReportBatchItemFailures"]
+  enabled                 = true
 }
 
 resource "aws_cloudwatch_event_rule" "dispatcher" {
   name                = "${var.name_prefix}-dispatcher"
-  description         = "Low-frequency no-op dispatcher shell for due-flight selection."
+  description         = "Low-frequency dispatcher for due-flight selection."
   schedule_expression = var.dispatcher_schedule_expression
 
   tags = var.tags

@@ -9,17 +9,17 @@ output "http_api_endpoint" {
 }
 
 output "api_lambda_function_name" {
-  description = "Go API Lambda shell function name."
+  description = "Go API Lambda function name."
   value       = module.api_lambda.function_name
 }
 
 output "fetcher_lambda_function_name" {
-  description = "Fetcher Lambda shell function name."
+  description = "Fetcher Lambda function name."
   value       = module.fetcher_lambda.function_name
 }
 
 output "dispatcher_lambda_function_name" {
-  description = "Dispatcher Lambda shell function name."
+  description = "Dispatcher Lambda function name."
   value       = module.dispatcher_lambda.function_name
 }
 
@@ -34,7 +34,7 @@ output "fetch_task_dlq_url" {
 }
 
 output "dynamodb_table_names" {
-  description = "DynamoDB table names used by the dev API and worker shells."
+  description = "DynamoDB table names used by the dev API and workers."
   value       = module.data_tables.table_names
 }
 

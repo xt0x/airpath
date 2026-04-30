@@ -9,7 +9,7 @@
     "eslint": "eslint .",
     "format": "pnpm exec prettier --write \"**/*.{md,json,yml,yaml,ts,tsx,js,mjs,cjs}\"",
     "lint": "pnpm exec prettier --check \"**/*.{md,json,yml,yaml,ts,tsx,js,mjs,cjs}\" && pnpm exec eslint . && pnpm -r --if-present run lint",
-    "test": "pnpm exec vitest run docs infra --passWithNoTests && pnpm -r --if-present run test",
+    "test": "pnpm exec vitest run infra --passWithNoTests && pnpm -r --if-present run test",
     "test:watch": "pnpm -r --if-present run test:watch",
     "typecheck": "pnpm -r --if-present run typecheck"
   },

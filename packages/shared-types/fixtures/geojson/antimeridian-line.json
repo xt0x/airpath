@@ -1,0 +1,23 @@
+{
+  "description": "A two-point line crossing the antimeridian must split at +/-180 without drawing across the world.",
+  "input": [
+    {
+      "longitude": 170,
+      "latitude": 35
+    },
+    {
+      "longitude": -170,
+      "latitude": 40
+    }
+  ],
+  "expectedCoordinates": [
+    [
+      [170, 35],
+      [180, 37.5]
+    ],
+    [
+      [-180, 37.5],
+      [-170, 40]
+    ]
+  ]
+}

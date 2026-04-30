@@ -2,26 +2,59 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-  FlightDashboardView,
-  FlightMap,
-  RefreshControls,
-  SearchPanel,
-  StaleDataNotice,
-  SummaryPanel,
-  UsageStatusBanner,
-} from "./flight-dashboard";
-import { sampleDetail, sampleMapData, sampleSearch, sampleUsage } from "./sample-data";
+  sampleDetail,
+  sampleMapData,
+  sampleSearch,
+  sampleUsage,
+} from "../../../tests/fixtures/flight-dashboard-test-data";
+import { FlightDashboard, loadFlightSnapshot } from "./flight-dashboard";
+import { FlightDashboardView } from "./flight-dashboard-view";
+import { FlightMap } from "./flight-map";
 
 describe("flight dashboard UI", () => {
+  it("starts production dashboard state without fixture flight data", () => {
+    const html = renderToStaticMarkup(<FlightDashboard />);
+
+    expect(html).not.toContain("ANA110");
+    expect(html).not.toContain("Tokyo Haneda");
+    expect(html).toContain("Usage unavailable");
+  });
+
+  function renderDashboard(overrides: Partial<Parameters<typeof FlightDashboardView>[0]> = {}) {
+    return renderToStaticMarkup(
+      <FlightDashboardView
+        detail={sampleDetail}
+        error={null}
+        isRefreshing={false}
+        isSearching={false}
+        mapData={sampleMapData}
+        query="ANA110"
+        searchResults={sampleSearch.items}
+        selectedFlightId="iflg_1"
+        usage={sampleUsage}
+        onQueryChange={() => undefined}
+        onRefresh={() => undefined}
+        onSearch={() => undefined}
+        onSelectFlight={() => undefined}
+        {...overrides}
+      />,
+    );
+  }
+
   it("renders search input and selectable flight results", () => {
     const html = renderToStaticMarkup(
-      <SearchPanel
+      <FlightDashboardView
+        detail={null}
         error={null}
+        isRefreshing={false}
         isSearching={false}
+        mapData={null}
         query="ANA110"
-        results={sampleSearch.items}
+        searchResults={sampleSearch.items}
         selectedFlightId="iflg_1"
+        usage={null}
         onQueryChange={() => undefined}
+        onRefresh={() => undefined}
         onSearch={() => undefined}
         onSelectFlight={() => undefined}
       />,
@@ -35,10 +68,13 @@ describe("flight dashboard UI", () => {
   });
 
   it("renders summary, freshness, and stale cache state", () => {
-    const summary = renderToStaticMarkup(<SummaryPanel detail={sampleDetail} />);
-    const stale = renderToStaticMarkup(
-      <StaleDataNotice cache={{ ...sampleDetail.cache, freshness: "stale", stale: true }} />,
-    );
+    const summary = renderDashboard();
+    const stale = renderDashboard({
+      detail: {
+        ...sampleDetail,
+        cache: { ...sampleDetail.cache, freshness: "stale", stale: true },
+      },
+    });
 
     expect(summary).toContain("En Route");
     expect(summary).toContain("Tokyo Haneda");
@@ -60,73 +96,52 @@ describe("flight dashboard UI", () => {
   });
 
   it("disables manual refresh when budget or rate guards are active", () => {
-    const stopped = renderToStaticMarkup(
-      <RefreshControls
-        disabled={false}
-        isRefreshing={false}
-        usage={{ ...sampleUsage, fetchingEnabled: false }}
-        onRefresh={() => undefined}
-      />,
-    );
-    const active = renderToStaticMarkup(
-      <RefreshControls
-        disabled={false}
-        isRefreshing={false}
-        usage={sampleUsage}
-        onRefresh={() => undefined}
-      />,
-    );
+    const stopped = renderDashboard({ usage: { ...sampleUsage, fetchingEnabled: false } });
+    const active = renderDashboard();
 
     expect(stopped).toContain("disabled");
     expect(active).not.toContain("disabled");
   });
 
   it("renders usage state and the complete dashboard shell", () => {
-    const usage = renderToStaticMarkup(<UsageStatusBanner usage={sampleUsage} />);
-    const dashboard = renderToStaticMarkup(
-      <FlightDashboardView
-        detail={sampleDetail}
-        error={null}
-        isRefreshing={false}
-        isSearching={false}
-        mapData={sampleMapData}
-        query="ANA110"
-        searchResults={sampleSearch.items}
-        selectedFlightId="iflg_1"
-        usage={sampleUsage}
-        onQueryChange={() => undefined}
-        onRefresh={() => undefined}
-        onSearch={() => undefined}
-        onSelectFlight={() => undefined}
-      />,
-    );
+    const dashboard = renderDashboard();
 
-    expect(usage).toContain("3.00 USD remaining");
     expect(dashboard).toContain("Airpath");
     expect(dashboard).toContain("ANA110");
     expect(dashboard).toContain("3.00 USD remaining");
   });
 
   it("renders the personal non-commercial low-frequency demo notice", () => {
-    const dashboard = renderToStaticMarkup(
-      <FlightDashboardView
-        detail={sampleDetail}
-        error={null}
-        isRefreshing={false}
-        isSearching={false}
-        mapData={sampleMapData}
-        query="ANA110"
-        searchResults={sampleSearch.items}
-        selectedFlightId="iflg_1"
-        usage={sampleUsage}
-        onQueryChange={() => undefined}
-        onRefresh={() => undefined}
-        onSearch={() => undefined}
-        onSelectFlight={() => undefined}
-      />,
-    );
+    const dashboard = renderDashboard();
 
     expect(dashboard).toContain("Personal non-commercial demo");
     expect(dashboard).toContain("low-frequency");
+  });
+
+  it("loads the reusable detail, map, and usage snapshot in parallel", async () => {
+    const calls: string[] = [];
+    const client = {
+      async getFlightDetail(flightId: string) {
+        calls.push(`detail:${flightId}`);
+        return sampleDetail;
+      },
+      async getFlightMapData(flightId: string) {
+        calls.push(`map:${flightId}`);
+        return sampleMapData;
+      },
+      async getUsageStatus() {
+        calls.push("usage");
+        return sampleUsage;
+      },
+    };
+
+    const snapshot = await loadFlightSnapshot(client, "iflg_1");
+
+    expect(snapshot).toEqual({
+      detail: sampleDetail,
+      mapData: sampleMapData,
+      usage: sampleUsage,
+    });
+    expect(calls).toEqual(["detail:iflg_1", "map:iflg_1", "usage"]);
   });
 });

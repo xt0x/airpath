@@ -16,11 +16,16 @@
     "src"
   ],
   "scripts": {
+    "build:deps": "pnpm --filter @airpath/shared-types build",
     "build": "tsc --project tsconfig.build.json",
-    "lint": "tsc --project tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
-    "test": "vitest run --passWithNoTests",
+    "lint": "pnpm run build:deps && tsc --project tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
+    "test": "pnpm run build:deps && vitest run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
-    "typecheck": "tsc --project tsconfig.json --noEmit"
+    "typecheck": "pnpm run build:deps && tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@airpath/shared-types": "workspace:*",
+    "@deck.gl/layers": "^9.3.1"
   },
   "devDependencies": {}
 }

@@ -44,12 +44,15 @@ func (s *MemoryRateLimitState) Stop(endpoint Endpoint, reason string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stopped[endpoint] = reason
+	delete(s.resetAt, endpoint)
 }
 
 func (s *MemoryRateLimitState) MarkRateLimited(endpoint Endpoint, until time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.markStopped(endpoint, until)
+	// A single 429 means low-priority enrichment calls should also pause, while
+	// summary and position calls can resume independently when their own state allows.
 	for _, lowPriorityEndpoint := range lowPriorityEndpoints() {
 		s.markStopped(lowPriorityEndpoint, until)
 	}

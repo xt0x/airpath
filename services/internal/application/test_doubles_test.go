@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 
 	"airpath/services/internal/domain"
 )
@@ -61,11 +62,15 @@ func (s *memoryMapDataStore) GetActualTrack(_ context.Context, flight domain.Fli
 }
 
 type memoryPositionStore struct {
-	latest map[domain.FlightID]domain.FlightPosition
+	latest  map[domain.FlightID]domain.FlightPosition
+	history map[domain.FlightID][]domain.FlightPosition
 }
 
 func newMemoryPositionStore() *memoryPositionStore {
-	return &memoryPositionStore{latest: map[domain.FlightID]domain.FlightPosition{}}
+	return &memoryPositionStore{
+		latest:  map[domain.FlightID]domain.FlightPosition{},
+		history: map[domain.FlightID][]domain.FlightPosition{},
+	}
 }
 
 func (s *memoryPositionStore) GetLatestPosition(_ context.Context, flightID domain.FlightID) (*domain.FlightPosition, CacheMetadata, error) {
@@ -76,12 +81,31 @@ func (s *memoryPositionStore) GetLatestPosition(_ context.Context, flightID doma
 	return &position, CacheMetadata{Freshness: CacheFreshnessFresh, Source: CacheSourceCache}, nil
 }
 
+func (s *memoryPositionStore) ListPositions(_ context.Context, flightID domain.FlightID, since *string, limit int) ([]domain.FlightPosition, CacheMetadata, error) {
+	positions := s.history[flightID]
+	filtered := make([]domain.FlightPosition, 0, len(positions))
+	for _, position := range positions {
+		if since != nil && position.Timestamp < *since {
+			continue
+		}
+		filtered = append(filtered, position)
+		if limit > 0 && len(filtered) >= limit {
+			break
+		}
+	}
+	return filtered, CacheMetadata{Freshness: CacheFreshnessFresh, Source: CacheSourceCache}, nil
+}
+
 type memoryFetchTaskQueue struct {
-	tasks []FetchTask
-	seen  map[string]struct{}
+	tasks      []FetchTask
+	seen       map[string]struct{}
+	enqueueErr error
 }
 
 func (q *memoryFetchTaskQueue) EnqueueFetchTask(_ context.Context, task FetchTask) (bool, error) {
+	if q.enqueueErr != nil {
+		return false, q.enqueueErr
+	}
 	if q.seen == nil {
 		q.seen = map[string]struct{}{}
 	}
@@ -91,6 +115,10 @@ func (q *memoryFetchTaskQueue) EnqueueFetchTask(_ context.Context, task FetchTas
 	q.seen[task.IdempotencyKey] = struct{}{}
 	q.tasks = append(q.tasks, task)
 	return true, nil
+}
+
+func errQueueUnavailable() error {
+	return errors.New("queue unavailable")
 }
 
 type memoryUsageGuard struct {

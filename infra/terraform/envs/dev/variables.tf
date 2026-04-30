@@ -34,7 +34,7 @@ variable "dispatcher_lambda_artifact_path" {
 }
 
 variable "dispatcher_schedule_expression" {
-  description = "EventBridge schedule expression for the dev no-op dispatcher shell."
+  description = "EventBridge schedule expression for the dev due-flight dispatcher."
   type        = string
   default     = "rate(15 minutes)"
 }

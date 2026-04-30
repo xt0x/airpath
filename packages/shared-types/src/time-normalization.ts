@@ -1,4 +1,4 @@
-import type { ISODateTimeString } from "./index.js";
+import type { ISODateTimeString } from "./domain-types.js";
 
 export interface NormalizeLocalDateTimeInput {
   localDateTime: string;

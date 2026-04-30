@@ -12,16 +12,16 @@ describe("flight route response fixtures", () => {
     const decoded = routeCases.cases.find(
       (routeCase) => routeCase.kind === "decoded_with_coordinates",
     );
+    const fixes = decoded?.routeResponse.body.fixes;
+    if (fixes === undefined) {
+      throw new Error("decoded route fixture is missing fixes");
+    }
 
     expect(decoded?.source.endpoint).toBe("GET /flights/{id}/route");
     expect(decoded?.routeResponse.status).toBe(200);
-    expect(decoded?.routeResponse.body.fixes.length).toBeGreaterThan(2);
-    expect(decoded?.routeResponse.body.fixes.every((fix) => typeof fix.latitude === "number")).toBe(
-      true,
-    );
-    expect(
-      decoded?.routeResponse.body.fixes.every((fix) => typeof fix.longitude === "number"),
-    ).toBe(true);
+    expect(fixes.length).toBeGreaterThan(2);
+    expect(fixes.every((fix) => typeof fix.latitude === "number")).toBe(true);
+    expect(fixes.every((fix) => typeof fix.longitude === "number")).toBe(true);
   });
 
   it("captures the route-string-only fallback when decoded coordinates are not available", () => {

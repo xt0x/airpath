@@ -17,7 +17,7 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.10.5"
+          terraform_version: "1.14.9"
 
       - uses: terraform-linters/setup-tflint@v4
 

@@ -24,7 +24,7 @@ variable "dispatcher_lambda_function_name" {
 }
 
 variable "dispatcher_schedule_expression" {
-  description = "EventBridge schedule expression for the dispatcher shell."
+  description = "EventBridge schedule expression for the dispatcher."
   type        = string
 }
 

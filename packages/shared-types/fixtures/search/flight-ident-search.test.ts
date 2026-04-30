@@ -36,6 +36,9 @@ describe("flight ident search fixture", () => {
 
   it("keeps nullable FlightAware fields explicit", () => {
     const [, scheduledFlight] = searchResponse.response.flights;
+    if (scheduledFlight === undefined) {
+      throw new Error("search fixture requires a scheduled flight");
+    }
 
     expect(scheduledFlight.fa_flight_id).toBeNull();
     expect(scheduledFlight.actual_out).toBeNull();

@@ -131,10 +131,28 @@ type SchedulesResponse struct {
 }
 
 type FlightSummary struct {
-	FAFlightID  *string
-	Ident       string
-	Origin      string
-	Destination string
+	FAFlightID      *string
+	Ident           string
+	IdentIATA       *string
+	AircraftType    *string
+	Registration    *string
+	Origin          string
+	Destination     string
+	ScheduledOut    *string
+	EstimatedOut    *string
+	ActualOut       *string
+	ScheduledOff    *string
+	EstimatedOff    *string
+	ActualOff       *string
+	ScheduledOn     *string
+	EstimatedOn     *string
+	ActualOn        *string
+	ScheduledIn     *string
+	EstimatedIn     *string
+	ActualIn        *string
+	Status          string
+	ProgressPercent *int
+	FiledEteSeconds *int
 }
 
 type RouteResponse struct {
@@ -149,10 +167,15 @@ type RouteFix struct {
 }
 
 type PositionResponse struct {
-	FAFlightID string
-	Latitude   *float64
-	Longitude  *float64
-	Timestamp  string
+	FAFlightID           string
+	Latitude             *float64
+	Longitude            *float64
+	AltitudeHundredsFeet *int
+	AltitudeChange       *string
+	GroundspeedKnots     *int
+	HeadingDegrees       *int
+	Timestamp            string
+	UpdateType           *string
 }
 
 type TrackResponse struct {
@@ -160,9 +183,14 @@ type TrackResponse struct {
 }
 
 type TrackPoint struct {
-	Latitude  float64
-	Longitude float64
-	Timestamp string
+	Latitude             float64 `json:"latitude"`
+	Longitude            float64 `json:"longitude"`
+	AltitudeHundredsFeet *int    `json:"altitude"`
+	AltitudeChange       *string `json:"altitude_change"`
+	GroundspeedKnots     *int    `json:"groundspeed"`
+	HeadingDegrees       *int    `json:"heading"`
+	Timestamp            string  `json:"timestamp"`
+	UpdateType           *string `json:"update_type"`
 }
 
 type UsageResponse struct {

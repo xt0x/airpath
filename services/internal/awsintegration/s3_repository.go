@@ -2,11 +2,13 @@ package awsintegration
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 
 	"airpath/services/internal/application"
 	"airpath/services/internal/domain"
-	"airpath/services/internal/flightaware"
+	"airpath/services/internal/geojson"
 )
 
 type S3GeoJSONRepository struct {
@@ -28,12 +30,22 @@ func (r *S3GeoJSONRepository) StoreTrack(ctx context.Context, flightID domain.Fl
 	return key, r.putLayer(ctx, key, layer)
 }
 
-func (r *S3GeoJSONRepository) StoreFlightAwareRoute(ctx context.Context, flightID domain.FlightID, response flightaware.RouteResponse) (string, error) {
-	return r.StoreRoute(ctx, flightID, routeLayerFromFlightAware(response))
+func (r *S3GeoJSONRepository) StoreRouteArtifact(ctx context.Context, flightID domain.FlightID, response application.ExternalRouteResponse) (string, error) {
+	layer := routeLayerFromExternal(response)
+	key, err := versionedLayerKey("routes", flightID, layer)
+	if err != nil {
+		return "", err
+	}
+	return key, r.putLayer(ctx, key, layer)
 }
 
-func (r *S3GeoJSONRepository) StoreFlightAwareTrack(ctx context.Context, flightID domain.FlightID, response flightaware.TrackResponse) (string, error) {
-	return r.StoreTrack(ctx, flightID, trackLayerFromFlightAware(response))
+func (r *S3GeoJSONRepository) StoreTrackArtifact(ctx context.Context, flightID domain.FlightID, response application.ExternalTrackResponse) (string, error) {
+	layer := trackLayerFromExternal(response)
+	key, err := versionedLayerKey("tracks", flightID, layer)
+	if err != nil {
+		return "", err
+	}
+	return key, r.putLayer(ctx, key, layer)
 }
 
 func (r *S3GeoJSONRepository) GetPlannedRoute(ctx context.Context, flight domain.Flight) (application.MapLayer, error) {
@@ -70,44 +82,40 @@ func (r *S3GeoJSONRepository) getLayer(ctx context.Context, key string) (applica
 	return layer, nil
 }
 
-func routeLayerFromFlightAware(response flightaware.RouteResponse) application.MapLayer {
-	coordinates := make([][]float64, 0, len(response.Fixes))
+func versionedLayerKey(prefix string, flightID domain.FlightID, layer application.MapLayer) (string, error) {
+	body, err := json.Marshal(layer)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(body)
+	return fmt.Sprintf("%s/%s/%x.json", prefix, flightID, sum[:8]), nil
+}
+
+func routeLayerFromExternal(response application.ExternalRouteResponse) application.MapLayer {
+	points := make([]geojson.Point, 0, len(response.Fixes))
 	for _, fix := range response.Fixes {
 		if fix.Latitude == nil || fix.Longitude == nil {
 			continue
 		}
-		coordinates = append(coordinates, []float64{*fix.Longitude, *fix.Latitude})
+		points = append(points, geojson.Point{Longitude: *fix.Longitude, Latitude: *fix.Latitude})
 	}
-	if len(coordinates) < 2 {
+	feature, ok := geojson.LineFeature(string(application.MapSourceFlightAwareRoute), "planned_route", points)
+	if !ok {
 		return application.MapLayer{Source: application.MapSourceFlightAwareRoute, Available: false, UnavailableReason: ptrString("route coordinates unavailable")}
 	}
-	return lineLayer(application.MapSourceFlightAwareRoute, "planned_route", coordinates)
+	return application.MapLayer{Source: application.MapSourceFlightAwareRoute, Available: true, GeoJSON: feature}
 }
 
-func trackLayerFromFlightAware(response flightaware.TrackResponse) application.MapLayer {
-	coordinates := make([][]float64, 0, len(response.Positions))
+func trackLayerFromExternal(response application.ExternalTrackResponse) application.MapLayer {
+	points := make([]geojson.Point, 0, len(response.Positions))
 	for _, position := range response.Positions {
-		coordinates = append(coordinates, []float64{position.Longitude, position.Latitude})
+		points = append(points, geojson.Point{Longitude: position.Longitude, Latitude: position.Latitude})
 	}
-	if len(coordinates) < 2 {
+	feature, ok := geojson.LineFeature(string(application.MapSourceFlightAwareTrack), "actual_track", points)
+	if !ok {
 		return application.MapLayer{Source: application.MapSourceFlightAwareTrack, Available: false, UnavailableReason: ptrString("track coordinates unavailable")}
 	}
-	return lineLayer(application.MapSourceFlightAwareTrack, "actual_track", coordinates)
-}
-
-func lineLayer(source application.MapSource, kind string, coordinates [][]float64) application.MapLayer {
-	return application.MapLayer{
-		Source:    source,
-		Available: true,
-		GeoJSON: map[string]any{
-			"type": "Feature",
-			"geometry": map[string]any{
-				"type":        "LineString",
-				"coordinates": coordinates,
-			},
-			"properties": map[string]any{"kind": kind},
-		},
-	}
+	return application.MapLayer{Source: application.MapSourceFlightAwareTrack, Available: true, GeoJSON: feature}
 }
 
 func ptrString(value string) *string {

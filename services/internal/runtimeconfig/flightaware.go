@@ -12,6 +12,7 @@ const (
 	FlightAwareRealCallsEnabledEnv    = "FLIGHTAWARE_REAL_CALLS_ENABLED"
 	FlightAwareFetchDisabledReasonEnv = "FLIGHTAWARE_FETCH_DISABLED_REASON"
 
+	DefaultEnvironment        = "local"
 	DefaultPersonalDemoNotice = "Personal non-commercial low-frequency demo; real FlightAware calls are opt-in."
 )
 
@@ -35,8 +36,13 @@ func LoadFlightAwareRuntimeConfig(lookup EnvLookup) (FlightAwareRuntimeConfig, e
 		notice = DefaultPersonalDemoNotice
 	}
 
+	environment := strings.TrimSpace(lookup(AirpathEnvironmentEnv))
+	if environment == "" {
+		environment = DefaultEnvironment
+	}
+
 	return FlightAwareRuntimeConfig{
-		Environment:        strings.TrimSpace(lookup(AirpathEnvironmentEnv)),
+		Environment:        environment,
 		PersonalDemoNotice: notice,
 		FetchEnabled:       BoolEnv(lookup, FlightAwareFetchEnabledEnv),
 		RealCallsEnabled:   BoolEnv(lookup, FlightAwareRealCallsEnabledEnv),

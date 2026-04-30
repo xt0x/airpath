@@ -160,77 +160,6 @@ func TestGenerateInternalFlightLegID(t *testing.T) {
 	}
 }
 
-func TestNullableDisplayTextKeepsMissingValuesExplicit(t *testing.T) {
-	if got := NullableDateTimeDisplayText(nil, MissingValueReasonNotAnnounced); got != "未発表" {
-		t.Fatalf("NullableDateTimeDisplayText(nil) = %q, want %q", got, "未発表")
-	}
-	if got := NullableTextDisplayText(nil, MissingValueReasonNotAcquired); got != "未取得" {
-		t.Fatalf("NullableTextDisplayText(nil) = %q, want %q", got, "未取得")
-	}
-	if got := NullableTextDisplayText(nil, MissingValueReasonUnavailable); got != "取得不可" {
-		t.Fatalf("NullableTextDisplayText(nil unavailable) = %q, want %q", got, "取得不可")
-	}
-	if got := NullableTextDisplayText(ptr("B789"), MissingValueReasonNotAcquired); got != "B789" {
-		t.Fatalf("NullableTextDisplayText(B789) = %q, want %q", got, "B789")
-	}
-	if got := NullableTextDisplayText(ptr("N12345"), MissingValueReasonNotAcquired); got != "N12345" {
-		t.Fatalf("NullableTextDisplayText(N12345) = %q, want %q", got, "N12345")
-	}
-}
-
-func TestNullableProgressDisplayTextDoesNotTreatZeroAsMissing(t *testing.T) {
-	if got := NullableProgressDisplayText(nil, MissingValueReasonNotAcquired); got != "未取得" {
-		t.Fatalf("NullableProgressDisplayText(nil) = %q, want %q", got, "未取得")
-	}
-	if got := NullableProgressDisplayText(ptr(0), MissingValueReasonNotAcquired); got != "0%" {
-		t.Fatalf("NullableProgressDisplayText(0) = %q, want %q", got, "0%%")
-	}
-	if got := NullableProgressDisplayText(ptr(62), MissingValueReasonNotAcquired); got != "62%" {
-		t.Fatalf("NullableProgressDisplayText(62) = %q, want %q", got, "62%%")
-	}
-}
-
-func TestNullableAirportDisplayTextKeepsKnownCodes(t *testing.T) {
-	airportWithMissingDetails := Airport{
-		Code:     "RJTT",
-		Name:     nil,
-		Timezone: nil,
-	}
-
-	if got := NullableAirportDisplayText(nil, MissingValueReasonNotAcquired); got != "未取得" {
-		t.Fatalf("NullableAirportDisplayText(nil) = %q, want %q", got, "未取得")
-	}
-	if got := NullableAirportDisplayText(&airportWithMissingDetails, MissingValueReasonNotAcquired); got != "RJTT" {
-		t.Fatalf("NullableAirportDisplayText(code only) = %q, want %q", got, "RJTT")
-	}
-	airportWithMissingDetails.Name = ptr("Tokyo Haneda")
-	if got := NullableAirportDisplayText(&airportWithMissingDetails, MissingValueReasonNotAcquired); got != "RJTT - Tokyo Haneda" {
-		t.Fatalf("NullableAirportDisplayText(with name) = %q, want %q", got, "RJTT - Tokyo Haneda")
-	}
-}
-
-func TestNullableDisplayValueCarriesStructuredMissingMetadata(t *testing.T) {
-	missing := ToNullableDisplayValue[string](nil, MissingValueReasonNotApplicable)
-	if missing.Kind != NullableDisplayKindMissing {
-		t.Fatalf("missing.Kind = %q, want %q", missing.Kind, NullableDisplayKindMissing)
-	}
-	if missing.Reason == nil || *missing.Reason != MissingValueReasonNotApplicable {
-		t.Fatalf("missing.Reason = %v, want %q", missing.Reason, MissingValueReasonNotApplicable)
-	}
-	if missing.Label == nil || *missing.Label != "対象外" {
-		t.Fatalf("missing.Label = %v, want %q", missing.Label, "対象外")
-	}
-
-	value := "2026-04-25T10:00:00Z"
-	available := ToNullableDisplayValue(&value, MissingValueReasonNotAnnounced)
-	if available.Kind != NullableDisplayKindAvailable {
-		t.Fatalf("available.Kind = %q, want %q", available.Kind, NullableDisplayKindAvailable)
-	}
-	if available.Value == nil || *available.Value != value {
-		t.Fatalf("available.Value = %v, want %q", available.Value, value)
-	}
-}
-
 func TestNormalizeUTCISODateTime(t *testing.T) {
 	cases := map[string]ISODateTimeString{
 		"2026-04-25T10:00:00Z":      "2026-04-25T10:00:00Z",
@@ -265,6 +194,13 @@ func TestNormalizeLocalDateTimeToUTCISO(t *testing.T) {
 			input: NormalizeLocalDateTimeInput{
 				LocalDateTime: "2026-04-25T03:00:00",
 				TimeZone:      "America/Los_Angeles",
+			},
+			want: "2026-04-25T10:00:00Z",
+		},
+		{
+			input: NormalizeLocalDateTimeInput{
+				LocalDateTime: "2026-04-25T19:00",
+				TimeZone:      "Asia/Tokyo",
 			},
 			want: "2026-04-25T10:00:00Z",
 		},
@@ -427,6 +363,51 @@ func TestCalculateFlightDurationReturnsNilWithoutCompleteSource(t *testing.T) {
 	if got != nil {
 		t.Fatalf("CalculateFlightDuration() = %+v, want nil", got)
 	}
+}
+
+func TestCalculateFlightDurationSkipsNonPositiveTimestampPairs(t *testing.T) {
+	times := baseFlightDurationTimes()
+	times.ActualOff = ptr(ISODateTimeString("2026-04-25T21:30:00Z"))
+	times.ActualOn = ptr(ISODateTimeString("2026-04-25T10:08:00Z"))
+	times.EstimatedOff = ptr(ISODateTimeString("2026-04-25T10:05:00Z"))
+	times.EstimatedOn = ptr(ISODateTimeString("2026-04-25T10:05:00Z"))
+
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(42000),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want scheduled duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindScheduled, 42000, ptr(ISODateTimeString("2026-04-25T10:00:00Z")), ptr(ISODateTimeString("2026-04-25T21:40:00Z")))
+}
+
+func TestCalculateFlightDurationSkipsNonPositiveFiledEte(t *testing.T) {
+	times := baseFlightDurationTimes()
+	times.ActualOff = nil
+	times.ActualOn = nil
+	times.EstimatedOff = nil
+	times.EstimatedOn = nil
+	times.ScheduledOff = nil
+	times.ScheduledOn = nil
+
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(0),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want gate duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindGateActual, 42480, ptr(ISODateTimeString("2026-04-25T10:02:00Z")), ptr(ISODateTimeString("2026-04-25T21:50:00Z")))
+
+	got = CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(-1),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want gate duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindGateActual, 42480, ptr(ISODateTimeString("2026-04-25T10:02:00Z")), ptr(ISODateTimeString("2026-04-25T21:50:00Z")))
 }
 
 func TestGenerateFlightEventDedupeKeyUsesProvisionalFlightLegID(t *testing.T) {

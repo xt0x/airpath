@@ -64,16 +64,21 @@ func durationFromPair(kind FlightDurationKind, startAt *ISODateTimeString, endAt
 		return nil
 	}
 
+	seconds := int(parsedEndAt.Sub(parsedStartAt).Seconds())
+	if seconds <= 0 {
+		return nil
+	}
+
 	return &FlightDuration{
 		Kind:    kind,
-		Seconds: int(parsedEndAt.Sub(parsedStartAt).Seconds()),
+		Seconds: seconds,
 		StartAt: &normalizedStartAt,
 		EndAt:   &normalizedEndAt,
 	}
 }
 
 func durationFromFiledEte(filedEteSeconds *int) *FlightDuration {
-	if filedEteSeconds == nil {
+	if filedEteSeconds == nil || *filedEteSeconds <= 0 {
 		return nil
 	}
 

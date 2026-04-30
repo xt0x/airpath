@@ -12,6 +12,15 @@ Next.js-specific configuration, dependencies, and environment examples live at t
 - `.env.example`: Documented environment variables for local frontend development.
 - `tsconfig.json`: TypeScript settings for the frontend app.
 
+`NEXT_PUBLIC_API_BASE_URL` is an optional API origin/base URL. Leave it empty
+for same-origin `/v1` routes, or set an origin such as `https://api.example.com`.
+The shared API route builders already include the `/v1` prefix.
+
+The frontend imports workspace packages through their package exports. Its
+verification and build commands run `build:deps` first, which generates the
+`@airpath/shared-types` and `@airpath/map-rendering` `dist` artifacts needed by
+TypeScript on clean CI workers.
+
 ## Commands
 
 Run these commands from `frontend`:

@@ -8,6 +8,23 @@ resource "aws_dynamodb_table" "flights" {
     type = "S"
   }
 
+  attribute {
+    name = "pollShard"
+    type = "S"
+  }
+
+  attribute {
+    name = "nextPollAt"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "poll-due-index"
+    hash_key        = "pollShard"
+    range_key       = "nextPollAt"
+    projection_type = "ALL"
+  }
+
   ttl {
     attribute_name = "ttl"
     enabled        = true
@@ -23,7 +40,13 @@ resource "aws_dynamodb_table" "flights" {
 resource "aws_dynamodb_table" "flight_lookup" {
   name         = "${var.name_prefix}-flight-lookup"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "lookupKey"
+  hash_key     = "lookupType"
+  range_key    = "lookupKey"
+
+  attribute {
+    name = "lookupType"
+    type = "S"
+  }
 
   attribute {
     name = "lookupKey"

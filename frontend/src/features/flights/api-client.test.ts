@@ -4,6 +4,30 @@ import { AirpathApiClient, AirpathApiError } from "./api-client";
 import type { FlightSearchResponse, UsageStatusResponse } from "./types";
 
 describe("AirpathApiClient", () => {
+  it("uses NEXT_PUBLIC_API_BASE_URL as an origin/base URL without duplicating the API prefix", async () => {
+    const originalBaseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example.test/";
+    const calls: string[] = [];
+    try {
+      const client = new AirpathApiClient({
+        fetcher: async (url) => {
+          calls.push(String(url));
+          return jsonResponse(responseFor(String(url)));
+        },
+      });
+
+      await client.getUsageStatus();
+
+      expect(calls).toEqual(["https://api.example.test/v1/usage/status"]);
+    } finally {
+      if (originalBaseURL === undefined) {
+        delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      } else {
+        process.env.NEXT_PUBLIC_API_BASE_URL = originalBaseURL;
+      }
+    }
+  });
+
   it("calls the MVP flight and usage endpoints with typed responses", async () => {
     const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
     const client = new AirpathApiClient({
@@ -58,17 +82,29 @@ describe("AirpathApiClient", () => {
       error: Pick<AirpathApiError["error"], "code" | "requestId">;
     });
   });
+
+  it("rejects malformed success responses before feature state consumes them", async () => {
+    const client = new AirpathApiClient({
+      fetcher: async () => jsonResponse({ cache: validCache() }),
+    });
+
+    await expect(client.searchFlights("ANA110")).rejects.toMatchObject({
+      name: "AirpathApiError",
+      status: 502,
+      error: {
+        code: "upstream_failure",
+        message: "Invalid response payload for /v1/flights/search",
+        retryable: true,
+        requestId: "client-validation",
+      },
+    });
+  });
 });
 
 function responseFor(
   url: string,
 ): FlightSearchResponse | UsageStatusResponse | Record<string, unknown> {
-  const cache = {
-    freshness: "fresh" as const,
-    source: "cache" as const,
-    stale: false,
-    checkedAt: "2026-04-29T00:00:00Z",
-  };
+  const cache = validCache();
   if (url.includes("/search")) {
     return { items: [], cache };
   }
@@ -140,7 +176,29 @@ function responseFor(
         actualIn: null,
       },
     },
+    route: {
+      source: "flightaware_route",
+      available: false,
+      geojson: null,
+      unavailableReason: "not fetched",
+    },
+    track: {
+      source: "flightaware_track",
+      available: false,
+      geojson: null,
+      unavailableReason: "not fetched",
+    },
+    current: null,
     cache,
+  };
+}
+
+function validCache() {
+  return {
+    freshness: "fresh" as const,
+    source: "cache" as const,
+    stale: false,
+    checkedAt: "2026-04-29T00:00:00Z",
   };
 }
 
