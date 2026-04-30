@@ -31,10 +31,11 @@ func TestOptInFlightAwareRouteTrackAndPositionRealCallsNormalizeResponses(t *tes
 		t.Skip("FLIGHTAWARE_TEST_FA_FLIGHT_ID is required for route/track/position real-call verification")
 	}
 	flightID := domain.FlightID("iflg_opt_in")
+	adapter := NewFlightAwareFetchAdapter(client)
 	geoRepo := NewS3GeoJSONRepository(NewMemoryObjectClient(), "geojson")
 	dynamoRepo := NewDynamoDBRepository(NewMemoryDynamoDBClient(), DynamoDBTables{FlightPositions: "FlightPositions"})
 
-	route, err := client.GetFlightRoute(context.Background(), flightaware.FlightRouteRequest{FAFlightID: faFlightID})
+	route, err := adapter.GetFlightRoute(context.Background(), faFlightID)
 	if err != nil {
 		t.Fatalf("GetFlightRoute(real) error = %v", err)
 	}
@@ -42,12 +43,12 @@ func TestOptInFlightAwareRouteTrackAndPositionRealCallsNormalizeResponses(t *tes
 		t.Fatalf("GetFlightRoute(real) returned neither route text nor fixes: %#v", route)
 	}
 	if len(route.Fixes) >= 2 {
-		if _, err := geoRepo.StoreFlightAwareRoute(context.Background(), flightID, route); err != nil {
-			t.Fatalf("StoreFlightAwareRoute(real) error = %v", err)
+		if _, err := geoRepo.StoreRouteArtifact(context.Background(), flightID, route); err != nil {
+			t.Fatalf("StoreRouteArtifact(real) error = %v", err)
 		}
 	}
 
-	track, err := client.GetFlightTrack(context.Background(), flightaware.FlightTrackRequest{FAFlightID: faFlightID})
+	track, err := adapter.GetFlightTrack(context.Background(), faFlightID)
 	if err != nil {
 		t.Fatalf("GetFlightTrack(real) error = %v", err)
 	}
@@ -55,20 +56,31 @@ func TestOptInFlightAwareRouteTrackAndPositionRealCallsNormalizeResponses(t *tes
 		t.Fatalf("GetFlightTrack(real) returned no positions")
 	}
 	if len(track.Positions) >= 2 {
-		if _, err := geoRepo.StoreFlightAwareTrack(context.Background(), flightID, track); err != nil {
-			t.Fatalf("StoreFlightAwareTrack(real) error = %v", err)
+		if _, err := geoRepo.StoreTrackArtifact(context.Background(), flightID, track); err != nil {
+			t.Fatalf("StoreTrackArtifact(real) error = %v", err)
 		}
 	}
 
-	position, err := client.GetFlightPosition(context.Background(), flightaware.FlightPositionRequest{FAFlightID: faFlightID})
+	position, err := adapter.GetFlightPosition(context.Background(), faFlightID)
 	if err != nil {
 		t.Fatalf("GetFlightPosition(real) error = %v", err)
 	}
 	if position.Latitude == nil || position.Longitude == nil || position.Timestamp == "" {
 		t.Fatalf("GetFlightPosition(real) did not normalize current position: %#v", position)
 	}
-	if err := dynamoRepo.PutFlightAwarePosition(context.Background(), flightID, position); err != nil {
-		t.Fatalf("PutFlightAwarePosition(real) error = %v", err)
+	storedPosition := domain.FlightPosition{
+		FlightID:  flightID,
+		Latitude:  *position.Latitude,
+		Longitude: *position.Longitude,
+		Timestamp: position.Timestamp,
+		Source:    domain.PositionSourceFlightAwarePosition,
+	}
+	if position.FAFlightID != "" {
+		faFlightID := domain.FAFlightID(position.FAFlightID)
+		storedPosition.FAFlightID = &faFlightID
+	}
+	if err := dynamoRepo.PutPosition(context.Background(), storedPosition); err != nil {
+		t.Fatalf("PutPosition(real) error = %v", err)
 	}
 }
 

@@ -70,6 +70,25 @@ func TestRateLimitGuardAllowsUsageEndpointWhenOtherEndpointStopped(t *testing.T)
 	}
 }
 
+func TestRateLimitStateManualStopOverridesExpiredTimedStop(t *testing.T) {
+	state := NewMemoryRateLimitState()
+	expiredAt := time.Date(2026, 4, 30, 10, 0, 0, 0, time.UTC)
+	now := expiredAt.Add(time.Minute)
+
+	state.MarkRateLimited(EndpointSearch, expiredAt)
+	if state.isStoppedAt(EndpointSearch, now) {
+		t.Fatal("search endpoint should no longer be stopped after timed backoff expires")
+	}
+
+	state.Stop(EndpointSearch, "budget stop")
+	if !state.isStoppedAt(EndpointSearch, now) {
+		t.Fatal("manual stop was masked by expired timed backoff")
+	}
+	if resetAt := state.ResetAt(EndpointSearch); resetAt != nil {
+		t.Fatalf("manual stop resetAt = %v, want nil", resetAt)
+	}
+}
+
 type rateLimitedOnceClient struct {
 	Client
 }

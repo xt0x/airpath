@@ -3,11 +3,11 @@ package flightaware
 import "context"
 
 type MaxPagesClient struct {
-	upstream Client
+	ClientDecorator
 }
 
 func NewMaxPagesClient(upstream Client) *MaxPagesClient {
-	return &MaxPagesClient{upstream: upstream}
+	return &MaxPagesClient{ClientDecorator: NewClientDecorator(upstream)}
 }
 
 func (c *MaxPagesClient) SearchFlights(ctx context.Context, request SearchFlightsRequest) (SearchFlightsResponse, error) {
@@ -16,23 +16,7 @@ func (c *MaxPagesClient) SearchFlights(ctx context.Context, request SearchFlight
 		return SearchFlightsResponse{}, err
 	}
 	request.MaxPages = maxPages
-	return c.upstream.SearchFlights(ctx, request)
-}
-
-func (c *MaxPagesClient) GetFlightSummary(ctx context.Context, request FlightSummaryRequest) (FlightSummary, error) {
-	return c.upstream.GetFlightSummary(ctx, request)
-}
-
-func (c *MaxPagesClient) GetFlightRoute(ctx context.Context, request FlightRouteRequest) (RouteResponse, error) {
-	return c.upstream.GetFlightRoute(ctx, request)
-}
-
-func (c *MaxPagesClient) GetFlightPosition(ctx context.Context, request FlightPositionRequest) (PositionResponse, error) {
-	return c.upstream.GetFlightPosition(ctx, request)
-}
-
-func (c *MaxPagesClient) GetFlightTrack(ctx context.Context, request FlightTrackRequest) (TrackResponse, error) {
-	return c.upstream.GetFlightTrack(ctx, request)
+	return c.ClientDecorator.SearchFlights(ctx, request)
 }
 
 func (c *MaxPagesClient) GetSchedules(ctx context.Context, request SchedulesRequest) (SchedulesResponse, error) {
@@ -41,9 +25,5 @@ func (c *MaxPagesClient) GetSchedules(ctx context.Context, request SchedulesRequ
 		return SchedulesResponse{}, err
 	}
 	request.MaxPages = maxPages
-	return c.upstream.GetSchedules(ctx, request)
-}
-
-func (c *MaxPagesClient) GetAccountUsage(ctx context.Context) (UsageResponse, error) {
-	return c.upstream.GetAccountUsage(ctx)
+	return c.ClientDecorator.GetSchedules(ctx, request)
 }

@@ -103,6 +103,8 @@ func withUsageAccounting[T any](ctx context.Context, client *UsageAccountingClie
 		return zero, err
 	}
 
+	// The before-call reservation is authoritative for budget enforcement; the
+	// upstream request is skipped if the recorder rejects the estimated cost.
 	result, upstreamErr := call()
 	after := before
 	after.Phase = UsageRecordPhaseAfter
