@@ -21,6 +21,9 @@ describe("future schedule fixture without a FlightAware flight ID", () => {
 
   it("keeps the fields needed to create provisionalFlightLegId before fa_flight_id exists", () => {
     const [primaryFlight] = scheduleResponse.response.scheduled;
+    if (primaryFlight === undefined) {
+      throw new Error("schedule fixture requires a primary flight");
+    }
 
     expect(primaryFlight).toMatchObject({
       ident: "ANON123",
@@ -37,6 +40,9 @@ describe("future schedule fixture without a FlightAware flight ID", () => {
 
   it("keeps nullable codeshare and airport-code variants explicit", () => {
     const [primaryFlight, codeshareFlight] = scheduleResponse.response.scheduled;
+    if (primaryFlight === undefined || codeshareFlight === undefined) {
+      throw new Error("schedule fixture requires primary and codeshare flights");
+    }
 
     expect(primaryFlight.actual_ident).toBeNull();
     expect(primaryFlight.origin_lid).toBeNull();

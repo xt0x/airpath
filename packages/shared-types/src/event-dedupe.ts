@@ -3,7 +3,8 @@ import type {
   FlightEventType,
   ISODateTimeString,
   ProvisionalFlightLegID,
-} from "./index.js";
+} from "./domain-types.js";
+import { hashStableParts } from "./stable-hash.js";
 
 export interface FlightEventDedupeKeyInput {
   eventType: FlightEventType;
@@ -13,7 +14,7 @@ export interface FlightEventDedupeKeyInput {
 }
 
 export function generateFlightEventDedupeKey(input: FlightEventDedupeKeyInput): string {
-  return hashDedupeKeyParts([
+  return hashStableParts([
     "polling",
     input.eventType,
     requireFlightKey(input.faFlightId, input.provisionalFlightLegId),
@@ -31,18 +32,4 @@ function requireFlightKey(
   }
 
   return flightKey;
-}
-
-function hashDedupeKeyParts(parts: readonly string[]): string {
-  let hash = 0xcbf29ce484222325n;
-  const prime = 0x100000001b3n;
-  const mask = 0xffffffffffffffffn;
-  const bytes = new TextEncoder().encode(parts.join("\u001f"));
-
-  for (const byte of bytes) {
-    hash ^= BigInt(byte);
-    hash = (hash * prime) & mask;
-  }
-
-  return hash.toString(16).padStart(16, "0").slice(0, 12);
 }

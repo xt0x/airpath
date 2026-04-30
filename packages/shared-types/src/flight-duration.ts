@@ -1,4 +1,4 @@
-import type { FlightTimes, ISODateTimeString } from "./index.js";
+import type { FlightTimes, ISODateTimeString } from "./domain-types.js";
 import { normalizeUtcIsoDateTime } from "./time-normalization.js";
 
 export type FlightDurationKind = "actual" | "estimated" | "scheduled" | "filed" | "gate_actual";
@@ -36,17 +36,21 @@ function durationFromPair(
 
   const normalizedStartAt = normalizeUtcIsoDateTime(startAt);
   const normalizedEndAt = normalizeUtcIsoDateTime(endAt);
+  const seconds = Math.floor((Date.parse(normalizedEndAt) - Date.parse(normalizedStartAt)) / 1000);
+  if (seconds <= 0) {
+    return null;
+  }
 
   return {
     kind,
-    seconds: Math.floor((Date.parse(normalizedEndAt) - Date.parse(normalizedStartAt)) / 1000),
+    seconds,
     startAt: normalizedStartAt,
     endAt: normalizedEndAt,
   };
 }
 
 function durationFromFiledEte(filedEteSeconds: number | null | undefined): FlightDuration | null {
-  if (filedEteSeconds === null || filedEteSeconds === undefined) {
+  if (filedEteSeconds === null || filedEteSeconds === undefined || filedEteSeconds <= 0) {
     return null;
   }
 

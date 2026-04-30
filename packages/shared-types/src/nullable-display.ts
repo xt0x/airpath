@@ -1,4 +1,4 @@
-import type { Airport, ISODateTimeString } from "./index.js";
+import type { Airport, ISODateTimeString } from "./domain-types.js";
 
 export type MissingValueReason =
   | "not_acquired"

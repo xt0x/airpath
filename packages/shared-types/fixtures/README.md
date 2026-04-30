@@ -1,6 +1,6 @@
 # Shared Fixtures
 
-This directory contains fixtures shared by API contracts, Go API tests, and Next.js UI tests.
+This directory contains fixtures shared by API contracts, Go backend tests, and Next.js UI tests. Not every fixture is consumed by every runtime; each fixture directory states the contract it pins.
 
 L1 only creates the fixture location. Before committing real FlightAware responses, anonymize API keys, flight numbers, aircraft registrations, and user information.
 
@@ -64,3 +64,7 @@ The local environment did not provide a FlightAware AeroAPI key during this impl
 ## GeoJSON Contract Fixtures
 
 `geojson/antimeridian-line.json` is shared by the Go backend GeoJSON package and the TypeScript geo package. It pins the exact split coordinates for antimeridian crossings so the two implementations cannot drift silently.
+
+## Domain Helper Golden Fixture
+
+`domain/domain-helper-golden.json` is shared by the Go domain package and the TypeScript shared-types package. It pins duplicated helper behavior for flight-leg ID generation, time normalization, nullable display labels, and position metric normalization.
