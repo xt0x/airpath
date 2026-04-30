@@ -16,8 +16,4 @@ jobs:
         with:
           go-version: "1.24.2"
 
-      - run: make go-fmt
-
-      - run: make go-vet
-
-      - run: make go-test
+      - run: make ci-go
