@@ -197,6 +197,13 @@ func TestNormalizeLocalDateTimeToUTCISO(t *testing.T) {
 			},
 			want: "2026-04-25T10:00:00Z",
 		},
+		{
+			input: NormalizeLocalDateTimeInput{
+				LocalDateTime: "2026-04-25T19:00",
+				TimeZone:      "Asia/Tokyo",
+			},
+			want: "2026-04-25T10:00:00Z",
+		},
 	}
 
 	for _, tc := range cases {
@@ -356,6 +363,51 @@ func TestCalculateFlightDurationReturnsNilWithoutCompleteSource(t *testing.T) {
 	if got != nil {
 		t.Fatalf("CalculateFlightDuration() = %+v, want nil", got)
 	}
+}
+
+func TestCalculateFlightDurationSkipsNonPositiveTimestampPairs(t *testing.T) {
+	times := baseFlightDurationTimes()
+	times.ActualOff = ptr(ISODateTimeString("2026-04-25T21:30:00Z"))
+	times.ActualOn = ptr(ISODateTimeString("2026-04-25T10:08:00Z"))
+	times.EstimatedOff = ptr(ISODateTimeString("2026-04-25T10:05:00Z"))
+	times.EstimatedOn = ptr(ISODateTimeString("2026-04-25T10:05:00Z"))
+
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(42000),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want scheduled duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindScheduled, 42000, ptr(ISODateTimeString("2026-04-25T10:00:00Z")), ptr(ISODateTimeString("2026-04-25T21:40:00Z")))
+}
+
+func TestCalculateFlightDurationSkipsNonPositiveFiledEte(t *testing.T) {
+	times := baseFlightDurationTimes()
+	times.ActualOff = nil
+	times.ActualOn = nil
+	times.EstimatedOff = nil
+	times.EstimatedOn = nil
+	times.ScheduledOff = nil
+	times.ScheduledOn = nil
+
+	got := CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(0),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want gate duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindGateActual, 42480, ptr(ISODateTimeString("2026-04-25T10:02:00Z")), ptr(ISODateTimeString("2026-04-25T21:50:00Z")))
+
+	got = CalculateFlightDuration(FlightDurationInput{
+		Times:           times,
+		FiledEteSeconds: ptr(-1),
+	})
+	if got == nil {
+		t.Fatal("CalculateFlightDuration() = nil, want gate duration")
+	}
+	assertFlightDuration(t, *got, FlightDurationKindGateActual, 42480, ptr(ISODateTimeString("2026-04-25T10:02:00Z")), ptr(ISODateTimeString("2026-04-25T21:50:00Z")))
 }
 
 func TestGenerateFlightEventDedupeKeyUsesProvisionalFlightLegID(t *testing.T) {

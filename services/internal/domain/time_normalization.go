@@ -32,10 +32,21 @@ func NormalizeLocalDateTimeToUTCISO(input NormalizeLocalDateTimeInput) (ISODateT
 		return "", errors.New("invalid IANA timezone")
 	}
 
-	parsed, err := time.ParseInLocation("2006-01-02T15:04:05", input.LocalDateTime, location)
+	parsed, err := parseLocalDateTimeInLocation(input.LocalDateTime, location)
 	if err != nil {
 		return "", errors.New("invalid local ISO 8601 date-time")
 	}
 
 	return ISODateTimeString(parsed.UTC().Format("2006-01-02T15:04:05Z")), nil
+}
+
+func parseLocalDateTimeInLocation(value string, location *time.Location) (time.Time, error) {
+	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02T15:04"} {
+		parsed, err := time.ParseInLocation(layout, value, location)
+		if err == nil {
+			return parsed, nil
+		}
+	}
+
+	return time.Time{}, errors.New("invalid local ISO 8601 date-time")
 }
