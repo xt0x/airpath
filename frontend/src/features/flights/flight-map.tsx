@@ -10,7 +10,7 @@ export function FlightMap({ mapData }: { mapData: FlightMapDataResponse | null }
 
   return (
     <section
-      className="map-surface"
+      className="flight-dashboard__map-surface"
       data-deck-layer-count={deckLayers.length}
       data-renderer="mapbox-deckgl-compatible"
     >
@@ -22,7 +22,7 @@ export function FlightMap({ mapData }: { mapData: FlightMapDataResponse | null }
           <circle data-layer="current" cx={currentPoint.x} cy={currentPoint.y} r="1.8" />
         ) : null}
       </svg>
-      <div className="layer-strip">
+      <div className="flight-dashboard__layer-strip">
         <LayerState label="Planned" layer={mapData?.planned ?? null} />
         <LayerState label="Actual" layer={mapData?.actual ?? null} />
         <LayerState label="Current" layer={mapData?.current ?? null} />
@@ -39,7 +39,15 @@ function LayerState({
   layer: FlightMapDataResponse["planned"] | null;
 }) {
   return (
-    <span className={layer?.available ? "layer-state available" : "layer-state"}>{label}</span>
+    <span
+      className={
+        layer?.available
+          ? "flight-dashboard__layer-state available"
+          : "flight-dashboard__layer-state"
+      }
+    >
+      {label}
+    </span>
   );
 }
 

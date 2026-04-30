@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "../features/flights/flight-dashboard.css";
 
 export const metadata: Metadata = {
   title: "Airpath",

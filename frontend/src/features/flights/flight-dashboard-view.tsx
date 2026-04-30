@@ -28,19 +28,23 @@ interface FlightDashboardViewProps {
 
 export function FlightDashboardView(props: FlightDashboardViewProps) {
   return (
-    <main className="app-shell">
-      <header className="topbar">
+    <main className="flight-dashboard">
+      <header className="flight-dashboard__topbar">
         <div>
-          <p className="eyebrow">Airpath</p>
-          <h1>Flight route workspace</h1>
-          <p className="demo-notice">Personal non-commercial demo - low-frequency use</p>
+          <p className="flight-dashboard__eyebrow">Airpath</p>
+          <h1 className="flight-dashboard__title">Flight route workspace</h1>
+          <p className="flight-dashboard__demo-notice">
+            Personal non-commercial demo - low-frequency use
+          </p>
         </div>
         <UsageStatusBanner usage={props.usage} />
       </header>
 
-      {props.error !== null ? <div className="error-banner">{props.error}</div> : null}
+      {props.error !== null ? (
+        <div className="flight-dashboard__error-banner">{props.error}</div>
+      ) : null}
 
-      <section className="workspace">
+      <section className="flight-dashboard__workspace">
         <SearchPanel
           error={props.error}
           isSearching={props.isSearching}
@@ -51,11 +55,11 @@ export function FlightDashboardView(props: FlightDashboardViewProps) {
           onSearch={props.onSearch}
           onSelectFlight={props.onSelectFlight}
         />
-        <section className="main-stack">
+        <section className="flight-dashboard__main-stack">
           <FlightMap mapData={props.mapData} />
-          <div className="detail-grid">
+          <div className="flight-dashboard__detail-grid">
             <SummaryPanel detail={props.detail} />
-            <div className="panel">
+            <div className="flight-dashboard__panel">
               <StaleDataNotice cache={props.detail?.cache ?? null} />
               <RefreshControls
                 disabled={props.selectedFlightId === null}
@@ -82,17 +86,17 @@ interface SearchPanelProps {
   onSelectFlight: (flightId: string) => void;
 }
 
-export function SearchPanel(props: SearchPanelProps) {
+function SearchPanel(props: SearchPanelProps) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     props.onSearch();
   }
 
   return (
-    <aside className="search-pane">
-      <form className="search-form" onSubmit={submit}>
+    <aside className="flight-dashboard__search-pane">
+      <form className="flight-dashboard__search-form" onSubmit={submit}>
         <label htmlFor="ident">Flight</label>
-        <div className="search-row">
+        <div className="flight-dashboard__search-row">
           <input
             id="ident"
             name="ident"
@@ -105,12 +109,12 @@ export function SearchPanel(props: SearchPanelProps) {
           </button>
         </div>
       </form>
-      <div className="result-list">
+      <div className="flight-dashboard__result-list">
         {props.results.map((flight) => (
           <button
             key={flight.flightId}
             type="button"
-            className="result-row"
+            className="flight-dashboard__result-row"
             aria-current={props.selectedFlightId === flight.flightId}
             onClick={() => props.onSelectFlight(flight.flightId)}
           >
@@ -118,32 +122,34 @@ export function SearchPanel(props: SearchPanelProps) {
               <strong>{flight.ident}</strong>
               <small>{flight.status}</small>
             </span>
-            <span className="route-pair">
+            <span className="flight-dashboard__route-pair">
               {flight.origin} <span aria-hidden="true">→</span> {flight.destination}
             </span>
           </button>
         ))}
       </div>
-      {props.error !== null ? <p className="inline-error">{props.error}</p> : null}
+      {props.error !== null ? (
+        <p className="flight-dashboard__inline-error">{props.error}</p>
+      ) : null}
     </aside>
   );
 }
 
-export function SummaryPanel({ detail }: { detail: FlightDetailResponse | null }) {
+function SummaryPanel({ detail }: { detail: FlightDetailResponse | null }) {
   if (detail === null) {
-    return <section className="panel empty-panel" />;
+    return <section className="flight-dashboard__panel flight-dashboard__empty-panel" />;
   }
   const { flight } = detail;
   return (
-    <section className="panel summary-panel">
-      <div className="summary-heading">
+    <section className="flight-dashboard__panel flight-dashboard__summary-panel">
+      <div className="flight-dashboard__summary-heading">
         <div>
-          <p className="eyebrow">{flight.identIata ?? flight.ident}</p>
-          <h2>{flight.ident}</h2>
+          <p className="flight-dashboard__eyebrow">{flight.identIata ?? flight.ident}</p>
+          <h2 className="flight-dashboard__heading">{flight.ident}</h2>
         </div>
-        <span className="status-pill">{flight.status}</span>
+        <span className="flight-dashboard__status-pill">{flight.status}</span>
       </div>
-      <dl className="metric-grid">
+      <dl className="flight-dashboard__metric-grid">
         <div>
           <dt>Origin</dt>
           <dd>{airportLabel(flight.origin)}</dd>
@@ -173,7 +179,7 @@ export function SummaryPanel({ detail }: { detail: FlightDetailResponse | null }
   );
 }
 
-export function RefreshControls({
+function RefreshControls({
   disabled,
   isRefreshing,
   usage,
@@ -191,7 +197,7 @@ export function RefreshControls({
   return (
     <button
       type="button"
-      className="refresh-button"
+      className="flight-dashboard__refresh-button"
       disabled={disabled || guardActive || isRefreshing}
       onClick={onRefresh}
     >
@@ -200,20 +206,20 @@ export function RefreshControls({
   );
 }
 
-export function StaleDataNotice({ cache }: { cache: CacheMetadata | null }) {
+function StaleDataNotice({ cache }: { cache: CacheMetadata | null }) {
   if (cache === null || !cache.stale) {
-    return <p className="cache-note">Cache {cache?.freshness ?? "miss"}</p>;
+    return <p className="flight-dashboard__cache-note">Cache {cache?.freshness ?? "miss"}</p>;
   }
   return (
-    <p className="cache-note stale">
+    <p className="flight-dashboard__cache-note stale">
       Cached data is {cache.freshness}. Checked {formatTime(cache.checkedAt)}.
     </p>
   );
 }
 
-export function UsageStatusBanner({ usage }: { usage: UsageStatusResponse | null }) {
+function UsageStatusBanner({ usage }: { usage: UsageStatusResponse | null }) {
   if (usage === null) {
-    return <div className="usage-banner">Usage unavailable</div>;
+    return <div className="flight-dashboard__usage-banner">Usage unavailable</div>;
   }
   const remaining = Math.max(
     0,
@@ -221,7 +227,13 @@ export function UsageStatusBanner({ usage }: { usage: UsageStatusResponse | null
   );
   const guardLabel = usage.fetchingEnabled ? "Fetch enabled" : "Fetch stopped";
   return (
-    <div className={usage.fetchingEnabled ? "usage-banner" : "usage-banner stopped"}>
+    <div
+      className={
+        usage.fetchingEnabled
+          ? "flight-dashboard__usage-banner"
+          : "flight-dashboard__usage-banner stopped"
+      }
+    >
       <strong>{remaining.toFixed(2)} USD remaining</strong>
       <span>{guardLabel}</span>
     </div>

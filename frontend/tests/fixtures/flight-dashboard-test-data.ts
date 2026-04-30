@@ -3,7 +3,7 @@ import type {
   FlightMapDataResponse,
   FlightSearchResponse,
   UsageStatusResponse,
-} from "./types";
+} from "../../src/features/flights/types";
 
 const freshCache = {
   freshness: "fresh" as const,
@@ -66,6 +66,17 @@ export const sampleDetail: FlightDetailResponse = {
       actualIn: null,
     },
   },
+  route: {
+    source: "flightaware_route",
+    available: false,
+    geojson: null,
+  },
+  track: {
+    source: "flightaware_track",
+    available: false,
+    geojson: null,
+  },
+  current: null,
   cache: freshCache,
 };
 
