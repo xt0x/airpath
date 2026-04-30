@@ -22,3 +22,8 @@ output "role_name" {
   description = "Lambda execution role name."
   value       = aws_iam_role.this.name
 }
+
+output "environment_variables" {
+  description = "Lambda environment variables planned for the function."
+  value       = aws_lambda_function.this.environment[0].variables
+}

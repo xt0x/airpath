@@ -5,10 +5,10 @@ Terraform owns AWS resource wiring for Airpath environments. It does not build a
 ## Responsibilities
 
 - `bootstrap` creates the shared Terraform state backend, lockfile access, encryption key, GitHub OIDC provider, and CI plan role.
-- `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime and carries native validation-failure tests for environment scoping, artifact retention, fetch-task DLQ thresholds, and IAM policy semantics.
+- `envs/dev` is the only deployable environment root today. It composes the reusable modules into the personal demo runtime and carries native validation-failure tests for environment scoping, artifact retention, fetch-task DLQ thresholds, IAM policy semantics, and plan-value contracts for FlightAware runtime flags, secret-reference outputs, and dev naming.
 - `envs/stg` and `envs/prod` validate provider, backend, variable, and output shape only. They carry native Terraform tests for environment defaults and invalid environment rejection, plus Vitest contract tests that keep resources, data sources, and modules absent until a shared environment module or explicit root resource graph is added.
 - `modules/api-http` owns HTTP API v2 routing to the API Lambda.
-- `modules/compute-lambda` owns Lambda execution roles, basic logging, inline least-privilege policy attachment, runtime settings, artifact references, and environment variables.
+- `modules/compute-lambda` owns Lambda execution roles, basic logging, inline least-privilege policy attachment, runtime settings, artifact references, and environment variables. It exposes planned environment variables as module output metadata for root-level Terraform plan tests; root outputs still expose only environment-appropriate deployment metadata.
 - `modules/data-dynamodb` owns flight cache, lookup/idempotency, position history, and usage budget tables.
 - `modules/eventing` owns the fetch task queue, DLQ, fetcher SQS event source mapping, dispatcher schedule, EventBridge invoke permission, and queue-consume permissions.
 - `modules/storage-s3` owns route and track GeoJSON artifact storage.
@@ -34,6 +34,8 @@ IAM policies follow those boundaries:
 - Dispatcher can query due polling state through the flight table GSI, update poll state, reserve or release fetch task idempotency records in the lookup table, read usage budget state, and send fetch tasks to SQS.
 
 Native dev-root Terraform tests decode the rendered IAM policy JSON to enforce those boundaries semantically. They keep secret value access fetcher-only, prevent dispatcher S3 and Secrets Manager permissions, and verify SQS/DynamoDB resource scopes against the module outputs that compose the dev environment.
+
+Dev-root plan-value tests inspect Terraform-interpreted module outputs rather than raw HCL strings. They prove that real FlightAware calls are disabled by default, that `allow_real_flightaware_calls = true` switches the API, fetcher, and dispatcher fetch flags plus the fetcher mode, that the FlightAware root output remains secret ARN metadata only, and that planned Lambda, data, storage, and eventing names keep the `airpath-dev-*` prefix.
 
 ## Secret Handling
 

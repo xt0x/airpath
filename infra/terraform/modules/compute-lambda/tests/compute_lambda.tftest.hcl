@@ -46,6 +46,15 @@ run "plans_lambda_runtime_and_environment_contract" {
 
   assert {
     condition = (
+      output.environment_variables.APP_ENV == "test" &&
+      output.environment_variables.TABLE_NAME == "airpath-test-flights" &&
+      output.environment_variables.BUCKET_NAME == "airpath-test-geojson"
+    )
+    error_message = "Lambda environment variables must be exposed as module output metadata for root plan contract tests."
+  }
+
+  assert {
+    condition = (
       aws_iam_role.this.name == "airpath-test-api-role" &&
       aws_iam_role_policy_attachment.basic_execution.role == aws_iam_role.this.name &&
       aws_iam_role_policy_attachment.basic_execution.policy_arn == "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
