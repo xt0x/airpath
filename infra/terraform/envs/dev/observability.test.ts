@@ -10,7 +10,7 @@ import {
   variableBlock,
 } from "../../test-support/hcl";
 
-describe("F16 monitoring and operations contract", () => {
+describe("monitoring and operations contract", () => {
   const devMain = readTerraformFile("envs/dev/main.tf");
   const devOutputs = readTerraformFile("envs/dev/outputs.tf");
   const eventingOutputs = readTerraformFile("modules/eventing/outputs.tf");

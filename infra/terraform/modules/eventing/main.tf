@@ -19,10 +19,11 @@ resource "aws_sqs_queue" "fetch_task" {
 }
 
 resource "aws_lambda_event_source_mapping" "fetcher" {
-  event_source_arn = aws_sqs_queue.fetch_task.arn
-  function_name    = var.fetcher_lambda_arn
-  batch_size       = 1
-  enabled          = true
+  event_source_arn        = aws_sqs_queue.fetch_task.arn
+  function_name           = var.fetcher_lambda_arn
+  batch_size              = 1
+  function_response_types = ["ReportBatchItemFailures"]
+  enabled                 = true
 }
 
 resource "aws_cloudwatch_event_rule" "dispatcher" {

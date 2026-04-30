@@ -10,7 +10,7 @@ import {
   variableBlock,
 } from "../test-support/hcl";
 
-describe("F6 Terraform bootstrap contract", () => {
+describe("Terraform bootstrap contract", () => {
   const main = readTerraformFile("bootstrap/main.tf");
   const variables = readTerraformFile("bootstrap/variables.tf");
   const outputs = readTerraformFile("bootstrap/outputs.tf");

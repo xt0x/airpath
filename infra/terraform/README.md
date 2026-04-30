@@ -53,3 +53,11 @@ make terraform-check
 The `envs/dev` root deploys the personal demo environment. It is personal, non-commercial, and low-frequency by policy. Lambda artifacts are built outside Terraform with `make lambda-artifacts`, then referenced by the dev artifact path variables.
 
 Real FlightAware calls are disabled by default. Keep `allow_real_flightaware_calls = false` for normal dev deployments. Set it to `true` only for a limited opt-in smoke test after a backend-only FlightAware API key has been stored in Secrets Manager. Terraform still stores only the secret reference, never the raw API key.
+
+The dev root owns the deployed runtime contract for the Go services:
+
+- API Lambda: HTTP API integration, DynamoDB cache and usage tables, S3 GeoJSON artifacts, fetch task enqueue permission, and the FlightAware secret ARN environment reference.
+- Fetcher Lambda: SQS event source mapping with `ReportBatchItemFailures`, DynamoDB lease/cache/position/usage writes, S3 route and track artifact writes, Secrets Manager read access for the FlightAware API key, and diagnostic SQS send access.
+- Dispatcher Lambda: EventBridge schedule, due-poll DynamoDB reads and updates, fetch-task idempotency reservations, fetch task SQS send access, and the runtime queue/table environment variables required by `services/internal/runtimewiring`.
+
+The dispatcher uses `DISPATCHER_ASSUME_ACTIVE_VIEWER=true` in dev so the personal demo can enqueue due polling tasks without a separate viewer activity signal. Staging and production should revisit that input when they introduce a real activity source.

@@ -1,5 +1,4 @@
 data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
 
 locals {
   name_prefix = "airpath-${var.environment}"
@@ -10,26 +9,41 @@ locals {
     ManagedBy   = "terraform"
   }
 
-  fetch_task_queue_name = "${local.name_prefix}-fetch-task"
-  fetch_task_queue_arn  = "arn:${data.aws_partition.current.partition}:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${local.fetch_task_queue_name}"
-  fetch_task_queue_url  = "https://sqs.${var.aws_region}.amazonaws.com/${data.aws_caller_identity.current.account_id}/${local.fetch_task_queue_name}"
-  geojson_bucket_name   = "${local.name_prefix}-geojson-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+  geojson_bucket_name = "${local.name_prefix}-geojson-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
 
   flightaware_real_calls_enabled    = var.allow_real_flightaware_calls ? "true" : "false"
   flightaware_fetch_enabled         = var.allow_real_flightaware_calls ? "true" : "false"
   flightaware_fetch_disabled_reason = var.allow_real_flightaware_calls ? "" : var.flightaware_fetch_disabled_reason
 }
 
-data "aws_iam_policy_document" "dispatcher_enqueue" {
+data "aws_iam_policy_document" "dispatcher_data_access" {
+  statement {
+    actions = [
+      "dynamodb:DeleteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem",
+    ]
+
+    resources = [
+      module.data_tables.table_arns.flights,
+      "${module.data_tables.table_arns.flights}/index/poll-due-index",
+      module.data_tables.table_arns.flight_lookup,
+      module.data_tables.table_arns.usage_budget,
+    ]
+  }
+
   statement {
     actions   = ["sqs:SendMessage"]
-    resources = [local.fetch_task_queue_arn]
+    resources = [module.fetch_task_queue.fetch_task_queue_arn]
   }
 }
 
 data "aws_iam_policy_document" "api_data_access" {
   statement {
     actions = [
+      "dynamodb:DeleteItem",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
@@ -65,9 +79,11 @@ data "aws_iam_policy_document" "api_data_access" {
 data "aws_iam_policy_document" "fetcher_data_access" {
   statement {
     actions = [
+      "dynamodb:DeleteItem",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
+      "dynamodb:TransactWriteItems",
       "dynamodb:UpdateItem",
     ]
 
@@ -93,6 +109,11 @@ data "aws_iam_policy_document" "fetcher_data_access" {
     ]
 
     resources = [module.secret_references.flightaware_api_key_secret_arn]
+  }
+
+  statement {
+    actions   = ["sqs:SendMessage"]
+    resources = [module.fetch_task_queue.fetch_task_dlq_arn]
   }
 }
 
@@ -165,6 +186,7 @@ module "fetcher_lambda" {
     FLIGHTAWARE_FETCH_DISABLED_REASON = local.flightaware_fetch_disabled_reason
     FLIGHTAWARE_FETCH_ENABLED         = local.flightaware_fetch_enabled
     FLIGHTAWARE_REAL_CALLS_ENABLED    = local.flightaware_real_calls_enabled
+    FETCH_TASK_DIAGNOSTIC_QUEUE_URL   = module.fetch_task_queue.fetch_task_dlq_url
     FLIGHTS_TABLE_NAME                = module.data_tables.table_names.flights
     FLIGHT_LOOKUP_TABLE_NAME          = module.data_tables.table_names.flight_lookup
     FLIGHT_POSITIONS_TABLE_NAME       = module.data_tables.table_names.flight_positions
@@ -183,13 +205,19 @@ module "dispatcher_lambda" {
   artifact_path   = var.dispatcher_lambda_artifact_path
   memory_size     = 128
   timeout_seconds = 10
-  policy_json     = data.aws_iam_policy_document.dispatcher_enqueue.json
+  policy_json     = data.aws_iam_policy_document.dispatcher_data_access.json
 
   environment_variables = {
-    AIRPATH_ENVIRONMENT  = var.environment
-    FETCH_TASK_QUEUE_URL = local.fetch_task_queue_url
-    NOOP_FETCH_ENABLED   = "false"
-    DISPATCHER_MODE      = "active"
+    AIRPATH_ENVIRONMENT             = var.environment
+    DISPATCHER_ASSUME_ACTIVE_VIEWER = "true"
+    DISPATCHER_MODE                 = "active"
+    FETCH_TASK_QUEUE_URL            = module.fetch_task_queue.fetch_task_queue_url
+    FLIGHTS_TABLE_NAME              = module.data_tables.table_names.flights
+    FLIGHT_LOOKUP_TABLE_NAME        = module.data_tables.table_names.flight_lookup
+    FLIGHTAWARE_FETCH_ENABLED       = local.flightaware_fetch_enabled
+    FLIGHTAWARE_REAL_CALLS_ENABLED  = local.flightaware_real_calls_enabled
+    NOOP_FETCH_ENABLED              = "false"
+    USAGE_BUDGET_TABLE_NAME         = module.data_tables.table_names.usage_budget
   }
 
   tags = local.common_tags
