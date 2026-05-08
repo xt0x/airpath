@@ -5,7 +5,10 @@ import { mvpExcludedContracts } from "./api-types.js";
 export { apiPaths } from "./api-paths.js";
 export { apiRouteBuilders, apiRouteTemplates } from "./api-routes.js";
 export type { FlightPositionsRouteQuery } from "./api-routes.js";
+export type { AirportBoardRouteQuery } from "./api-routes.js";
 export { apiSchemas, fetchTaskSchema } from "./api-schemas.js";
+export { validateApiSchema } from "./api-validation.js";
+export type { ApiSchemaName, ApiSchemaValidationResult } from "./api-validation.js";
 export {
   apiErrorCodes,
   fetchTaskTypes,
@@ -37,6 +40,7 @@ export type {
   MvpExcludedContract,
   Position,
   RefreshTaskType,
+  UsageDailyStatus,
   UsageStatusResponse,
 } from "./api-types.js";
 

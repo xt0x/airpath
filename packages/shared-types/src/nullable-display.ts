@@ -22,10 +22,10 @@ export type NullableDisplayValue<T> =
 export type MissingValueLabel = (typeof missingValueLabels)[MissingValueReason];
 
 export const missingValueLabels = {
-  not_acquired: "未取得",
-  not_announced: "未発表",
-  not_applicable: "対象外",
-  unavailable: "取得不可",
+  not_acquired: "Not acquired",
+  not_announced: "Not announced",
+  not_applicable: "Not applicable",
+  unavailable: "Unavailable",
 } as const;
 
 export function toNullableDisplayValue<T>(

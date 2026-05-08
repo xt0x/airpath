@@ -6,6 +6,8 @@
   "packageManager": "pnpm@10.10.0",
   "scripts": {
     "build": "pnpm -r --if-present run build",
+    "dev": "pnpm --filter @airpath/web dev",
+    "dev:api": "bash -lc 'set -a; [ ! -f .env ] || source .env; set +a; cd services && env -u GOROOT go run ./cmd/localapi'",
     "eslint": "eslint .",
     "format": "pnpm exec prettier --write \"**/*.{md,json,yml,yaml,ts,tsx,js,mjs,cjs}\"",
     "lint": "pnpm exec prettier --check \"**/*.{md,json,yml,yaml,ts,tsx,js,mjs,cjs}\" && pnpm exec eslint . && pnpm -r --if-present run lint",

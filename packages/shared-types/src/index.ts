@@ -57,9 +57,13 @@ export {
   fetchTaskTypes,
   mvpExcludedContracts,
   refreshTaskTypes,
+  validateApiSchema,
 } from "./api-contract.js";
 export type { FlightPositionsRouteQuery } from "./api-contract.js";
+export type { AirportBoardRouteQuery } from "./api-contract.js";
 export type {
+  ApiSchemaName,
+  ApiSchemaValidationResult,
   ApiError,
   ApiErrorCode,
   AirportBoardDirection,
@@ -82,5 +86,6 @@ export type {
   MvpExcludedContract,
   Position,
   RefreshTaskType,
+  UsageDailyStatus,
   UsageStatusResponse,
 } from "./api-contract.js";

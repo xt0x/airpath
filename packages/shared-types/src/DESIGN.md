@@ -23,12 +23,12 @@ The same algorithm is mirrored in Go under `services/internal/domain` so API and
 
 Nullable display helpers convert missing FlightAware-derived values into explicit labels while preserving meaningful present values such as progress `0`. The helpers cover generic nullable values plus focused display conversion for time strings, progress percentages, airport labels, aircraft type, and registration text.
 
-Supported missing reasons map to the user-facing labels from the specification:
+Supported missing reasons map to English user-facing labels:
 
-- `not_acquired`: `未取得`
-- `not_announced`: `未発表`
-- `not_applicable`: `対象外`
-- `unavailable`: `取得不可`
+- `not_acquired`: `Not acquired`
+- `not_announced`: `Not announced`
+- `not_applicable`: `Not applicable`
+- `unavailable`: `Unavailable`
 
 The helpers never coerce nullish values to `0` or an empty string. Go mirrors the TypeScript helper behavior in `services/internal/domain`.
 
@@ -58,21 +58,21 @@ When `faFlightId` is unavailable for a provisional scheduled flight, the helper 
 
 ## API Contract Definition
 
-The package exports an OpenAPI 3.1 MVP contract for the backend HTTP API. The contract defines only the free-allowance surfaces needed before UI and Go API implementation: flight search, flight detail, map-data, positions, bounded refresh requests, and usage status.
+The package exports an OpenAPI 3.1 MVP contract for the backend HTTP API. The contract defines only the free-allowance surfaces needed before UI and Go API implementation: airport departure/arrival boards, flight search, flight detail, map-data, positions, bounded refresh requests, and usage status.
 
-The contract source is split by responsibility: `api-types.ts` owns TypeScript DTOs, `api-schemas.ts` owns reusable OpenAPI schema fragments, `api-paths.ts` owns route definitions, and `api-contract.ts` assembles the public OpenAPI literal and re-exports the stable API surface.
+The contract source is split by responsibility: `api-types.ts` owns TypeScript DTOs, `api-schemas.ts` owns reusable OpenAPI schema fragments, `api-paths.ts` owns route definitions, `api-validation.ts` owns dependency-free runtime validation against those schema fragments, and `api-contract.ts` assembles the public OpenAPI literal and re-exports the stable API surface.
 
-Flight search is ident-only in the shared contract. Date-scoped search is intentionally not advertised until the backend search use case and cache/upstream lookup path accept an explicit date filter.
+Airport-board discovery is represented as bounded departure and arrival endpoints with an airport code path parameter and optional ISO date query. Flight search remains ident-only in the shared contract. Date-scoped ident search is intentionally not advertised until the backend search use case and cache/upstream lookup path accept an explicit date filter.
 
 Map-data responses are returned as the full planned, actual, and current layer set. Position history exposes only `since` and `limit` query parameters. Layer filtering, map simplification, and position quality modes are intentionally not advertised until the backend application inputs implement those behaviors.
 
 Every success response carries `CacheMetadata` so callers can distinguish fresh cache, stale cache, cache misses, derived data, local accounting, and FlightAware-backed data. Typed error responses cover validation failures, budget stop, rate limiting, stale-cache misses, upstream failures, and explicit FlightAware fetch disablement.
 
-Usage status includes the monthly budget scope (`environment` and `month`) so the API contract matches the backend DynamoDB usage budget state.
+Usage status includes the monthly budget scope (`environment` and `month`) and `dailyUsage` entries with date, estimated USD cost, and estimated API call count so the frontend can render the selected month as a daily usage chart without deriving hidden contract fields.
 
 `FetchTask` is defined as an SQS message schema with only these task types: `summary`, `position`, `route`, `track`, and `final_track`. Public refresh requests use the non-summary subset because summary fetches are seeded through search misses. WebSocket delivery and FlightAware Alerts remain explicitly outside the free-allowance MVP contract.
 
-The package also exports TypeScript response interfaces for the API contract so frontend callers do not redefine response shapes independently from the shared contract source.
+The package also exports TypeScript response interfaces and the `validateApiSchema` runtime helper for the API contract so frontend callers do not redefine response shapes independently from the shared contract source.
 
 API response value objects that overlap with the shared domain model, such as airports and flight times, are derived from the domain exports instead of being redefined separately.
 

@@ -1,0 +1,378 @@
+.styleScope {
+  display: contents;
+}
+
+:global(.map-workspace__inset--search-focus .mapbox-screen) {
+  filter: blur(10px) saturate(0.85);
+  transform: scale(1.02);
+}
+
+:global(.live-map-panel) {
+  --live-map-panel-action-width: 5rem;
+  position: absolute;
+  z-index: 3;
+  top: 4.5rem;
+  right: 1rem;
+  display: flex;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 5.5rem);
+  max-height: calc(100dvh - 5.5rem);
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--card-foreground);
+  padding: 0.875rem;
+  box-shadow: 0 20px 48px rgb(0 0 0 / 32%);
+  backdrop-filter: blur(14px);
+  will-change: opacity, transform;
+}
+
+:global(.live-map-panel--centered) {
+  top: var(--live-map-search-top-offset);
+  right: auto;
+  left: calc(50% + var(--live-map-search-center-offset));
+  width: min(34rem, calc(100vw - var(--live-map-search-sidebar-offset) - 2rem));
+  max-height: min(44rem, calc(100vh - var(--live-map-search-top-offset) - 1rem));
+  max-height: min(44rem, calc(100dvh - var(--live-map-search-top-offset) - 1rem));
+  transform: translateX(-50%);
+  animation: liveMapPanelEnter 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition:
+    left 200ms ease-linear,
+    top 200ms ease-linear;
+}
+
+:global(.live-map-panel--closing) {
+  animation: liveMapPanelExit 420ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes liveMapPanelEnter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.35rem) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes liveMapPanelExit {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.35rem) scale(0.96);
+  }
+}
+
+:global(.live-map-panel__search) {
+  display: grid;
+  gap: 0.45rem;
+}
+
+:global(.live-map-panel__search label),
+:global(.live-map-panel__label),
+:global(.live-map-panel__section h2),
+:global(.live-map-panel__heading h2) {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  font-weight: 650;
+}
+
+:global(.live-map-panel__search > div:not(.live-map-panel__heading, .live-map-panel__segmented)) {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+:global(
+  .live-map-panel__search--secondary > div:not(.live-map-panel__heading, .live-map-panel__segmented)
+) {
+  grid-template-columns: minmax(0, 1fr) var(--live-map-panel-action-width);
+}
+
+:global(.live-map-panel__board-controls) {
+  grid-template-columns: minmax(0, 1fr) minmax(7.5rem, 0.72fr) var(--live-map-panel-action-width);
+}
+
+:global(.live-map-panel__refresh),
+:global(.live-map-panel__results button) {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--foreground);
+  font: inherit;
+}
+
+:global(.live-map-panel__refresh) {
+  display: inline-flex;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  padding: 0 0.7rem;
+  font-weight: 650;
+}
+
+:global(.live-map-panel__segmented) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+:global(.live-map-panel__direction-button) {
+  min-width: 0;
+  height: 2.35rem;
+  border-color: var(--border);
+  border-radius: 4px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+:global(.live-map-panel__direction-button[data-selected="true"]) {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+:global(.live-map-panel__submit svg),
+:global(.live-map-panel__airport-trigger svg),
+:global(.live-map-panel__date-trigger svg),
+:global(.live-map-panel__refresh svg) {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+:global(.live-map-panel__airport-trigger),
+:global(.live-map-panel__date-trigger),
+:global(.live-map-panel__submit),
+:global(.live-map-panel__flight-input) {
+  min-width: 0;
+  height: 2.5rem;
+  border-color: var(--border);
+  border-radius: 4px;
+  box-shadow: 0 10px 22px rgb(0 0 0 / 18%);
+}
+
+:global(.live-map-panel__airport-trigger),
+:global(.live-map-panel__date-trigger),
+:global(.live-map-panel__flight-input) {
+  background: var(--input);
+  color: var(--foreground);
+}
+
+:global(.live-map-panel__flight-input::placeholder) {
+  color: var(--muted-foreground);
+}
+
+:global(.live-map-panel__airport-trigger) {
+  justify-content: space-between;
+}
+
+:global(.live-map-panel__date-trigger) {
+  justify-content: flex-start;
+}
+
+:global(.live-map-panel__submit) {
+  width: 100%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+:global(.live-map-panel__submit:hover) {
+  background: color-mix(in oklch, var(--primary) 88%, var(--background));
+}
+
+:global(.live-map-panel__airport-trigger span),
+:global(.live-map-panel__date-trigger span) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:global(.live-map-panel__airport-popover),
+:global(.live-map-panel__calendar-popover) {
+  border-color: var(--border);
+  border-radius: 4px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+
+:global(.live-map-panel__airport-popover) {
+  width: min(21rem, calc(100vw - 2rem));
+  padding: 0;
+}
+
+:global(.live-map-panel__calendar-popover) {
+  width: auto;
+  padding: 0;
+}
+
+:global(.live-map-panel__airport-popover [data-slot="command"]),
+:global(.live-map-panel__calendar-popover [data-slot="calendar"]) {
+  background: transparent;
+  color: var(--popover-foreground);
+}
+
+:global(.live-map-panel__airport-popover [data-slot="command-input-wrapper"]) {
+  border-color: var(--border);
+}
+
+:global(.live-map-panel__airport-option) {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+:global(.live-map-panel__airport-option strong),
+:global(.live-map-panel__airport-option small) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(.live-map-panel__airport-option small) {
+  color: var(--muted-foreground);
+}
+
+:global(.live-map-panel__submit:disabled),
+:global(.live-map-panel__refresh:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+:global(.live-map-panel__results) {
+  display: grid;
+  gap: 0.4rem;
+}
+
+:global(.live-map-panel__results button) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--muted);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+}
+
+:global(.live-map-panel__results button[data-selected="true"]) {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+
+:global(.live-map-panel__results button:disabled) {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+:global(.live-map-panel__candidate-main) {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+:global(.live-map-panel__candidate-main strong),
+:global(.live-map-panel__candidate-main span),
+:global(.live-map-panel__candidate-main small) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(.live-map-panel__candidate-action) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: var(--foreground);
+  font-size: 0.76rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+:global(.live-map-panel__candidate-action svg) {
+  width: 0.88rem;
+  height: 0.88rem;
+}
+
+:global(.live-map-panel__candidate-main span),
+:global(.live-map-panel__candidate-main small),
+:global(.live-map-panel__muted),
+:global(.live-map-panel__alert) {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+:global(.live-map-panel__candidate-main small) {
+  color: var(--muted-foreground);
+}
+
+:global(.live-map-panel__flight-examples) {
+  margin: 0;
+}
+
+:global(.live-map-panel__alert) {
+  margin: 0;
+  border: 1px solid var(--destructive);
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--destructive) 18%, transparent);
+  padding: 0.5rem 0.6rem;
+  color: var(--foreground);
+}
+
+:global(.live-map-panel__section) {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+:global(.live-map-panel__heading) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+:global(.live-map-panel__heading-badge) {
+  border-radius: 4px;
+  border-color: var(--border);
+  background: var(--muted);
+  padding: 0.16rem 0.48rem;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+
+:global(.live-map-panel__facts) {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+:global(.live-map-panel__facts dt) {
+  color: var(--muted-foreground);
+}
+
+:global(.live-map-panel__facts dd) {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+}
+
+:global(.live-map-panel__refresh) {
+  width: 100%;
+}

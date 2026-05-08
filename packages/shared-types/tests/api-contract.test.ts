@@ -14,6 +14,8 @@ import {
 describe("MVP API contract", () => {
   it("defines the HTTP API paths required by the free-allowance MVP", () => {
     const expectedPaths = [
+      "/v1/airports/{airportCode}/departures",
+      "/v1/airports/{airportCode}/arrivals",
       "/v1/flights/search",
       "/v1/flights/{flightId}",
       "/v1/flights/{flightId}/map-data",
@@ -25,12 +27,18 @@ describe("MVP API contract", () => {
     expect(Object.keys(apiContract.paths)).toEqual(expectedPaths);
     expect(Object.values(apiRouteTemplates)).toEqual(expectedPaths);
 
+    expect(apiContract.paths["/v1/airports/{airportCode}/departures"]).toHaveProperty("get");
+    expect(apiContract.paths["/v1/airports/{airportCode}/arrivals"]).toHaveProperty("get");
     expect(apiContract.paths["/v1/flights/search"]).toHaveProperty("get");
     expect(apiContract.paths["/v1/flights/{flightId}"]).toHaveProperty("get");
     expect(apiContract.paths["/v1/flights/{flightId}/map-data"]).toHaveProperty("get");
     expect(apiContract.paths["/v1/flights/{flightId}/positions"]).toHaveProperty("get");
     expect(apiContract.paths["/v1/flights/{flightId}/refresh"]).toHaveProperty("post");
     expect(apiContract.paths["/v1/usage/status"]).toHaveProperty("get");
+
+    const departureParameters =
+      apiContract.paths["/v1/airports/{airportCode}/departures"].get.parameters;
+    expect(departureParameters.map((parameter) => parameter.name)).toEqual(["airportCode", "date"]);
 
     const searchParameters = apiContract.paths["/v1/flights/search"].get.parameters;
     expect(searchParameters.map((parameter) => parameter.name)).toEqual(["ident"]);
@@ -48,6 +56,12 @@ describe("MVP API contract", () => {
   });
 
   it("builds concrete API routes from the shared route templates", () => {
+    expect(apiRouteBuilders.airportDepartures("rjtt", { date: "2026-05-04" })).toBe(
+      "/v1/airports/RJTT/departures?date=2026-05-04",
+    );
+    expect(apiRouteBuilders.airportArrivals("kjfk", { date: "2026-05-04" })).toBe(
+      "/v1/airports/KJFK/arrivals?date=2026-05-04",
+    );
     expect(apiRouteBuilders.searchFlights("ANA110")).toBe("/v1/flights/search?ident=ANA110");
     expect(apiRouteBuilders.flightDetail("iflg_1/segment")).toBe("/v1/flights/iflg_1%2Fsegment");
     expect(apiRouteBuilders.flightMapData("iflg_1")).toBe("/v1/flights/iflg_1/map-data");
@@ -61,6 +75,7 @@ describe("MVP API contract", () => {
   it("wraps every success response with cache metadata", () => {
     const successResponseSchemas = [
       "FlightSearchResponse",
+      "AirportBoardResponse",
       "FlightDetailResponse",
       "FlightMapDataResponse",
       "FlightPositionsResponse",
@@ -149,10 +164,24 @@ describe("MVP API contract", () => {
       "estimatedMonthToDateCost",
       "softStopThreshold",
       "stopped",
+      "dailyUsage",
     ]);
     expect(usageBudgetSchema.properties).toMatchObject({
       environment: { type: "string", minLength: 1 },
       month: { type: "string", pattern: "^\\d{4}-\\d{2}$" },
+      dailyUsage: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["date", "estimatedCostUSD", "estimatedCallCount"],
+          properties: {
+            date: { type: "string", format: "date" },
+            estimatedCostUSD: { type: "number", minimum: 0 },
+            estimatedCallCount: { type: "integer", minimum: 0 },
+          },
+        },
+      },
     });
   });
 

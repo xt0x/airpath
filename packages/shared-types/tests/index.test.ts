@@ -164,15 +164,15 @@ describe("flight leg ID generation", () => {
 
 describe("nullable display conversion", () => {
   it("keeps missing time, aircraft, and registration values explicit", () => {
-    expect(nullableDateTimeDisplayText(null, "not_announced")).toBe("未発表");
-    expect(nullableTextDisplayText(null, "not_acquired")).toBe("未取得");
-    expect(nullableTextDisplayText(undefined, "unavailable")).toBe("取得不可");
+    expect(nullableDateTimeDisplayText(null, "not_announced")).toBe("Not announced");
+    expect(nullableTextDisplayText(null, "not_acquired")).toBe("Not acquired");
+    expect(nullableTextDisplayText(undefined, "unavailable")).toBe("Unavailable");
     expect(nullableTextDisplayText("B789", "not_acquired")).toBe("B789");
     expect(nullableTextDisplayText("N12345", "not_acquired")).toBe("N12345");
   });
 
   it("does not treat zero progress as missing", () => {
-    expect(nullableProgressDisplayText(null, "not_acquired")).toBe("未取得");
+    expect(nullableProgressDisplayText(null, "not_acquired")).toBe("Not acquired");
     expect(nullableProgressDisplayText(0, "not_acquired")).toBe("0%");
     expect(nullableProgressDisplayText(62, "not_acquired")).toBe("62%");
   });
@@ -184,7 +184,7 @@ describe("nullable display conversion", () => {
       timezone: null,
     };
 
-    expect(nullableAirportDisplayText(null, "not_acquired")).toBe("未取得");
+    expect(nullableAirportDisplayText(null, "not_acquired")).toBe("Not acquired");
     expect(nullableAirportDisplayText(airportWithMissingDetails, "not_acquired")).toBe("RJTT");
     expect(
       nullableAirportDisplayText(
@@ -198,7 +198,7 @@ describe("nullable display conversion", () => {
     expect(toNullableDisplayValue(null, "not_applicable")).toEqual({
       kind: "missing",
       reason: "not_applicable",
-      label: "対象外",
+      label: "Not applicable",
     });
     expect(toNullableDisplayValue("2026-04-25T10:00:00Z", "not_announced")).toEqual({
       kind: "available",

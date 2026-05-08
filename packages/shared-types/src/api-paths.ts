@@ -2,7 +2,71 @@ import { refreshTaskTypes } from "./api-types.js";
 import { apiRouteTemplates } from "./api-routes.js";
 import { flightIdParameter, successJsonResponse, typedErrorResponse } from "./api-schemas.js";
 
+const airportCodeParameter = {
+  name: "airportCode",
+  in: "path",
+  required: true,
+  schema: {
+    type: "string",
+    minLength: 3,
+    maxLength: 4,
+  },
+} as const;
+
+const airportBoardResponses = {
+  "200": {
+    ...successJsonResponse,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/AirportBoardResponse" },
+      },
+    },
+  },
+  "400": typedErrorResponse,
+  "429": typedErrorResponse,
+  "502": typedErrorResponse,
+  "503": typedErrorResponse,
+} as const;
+
 export const apiPaths = {
+  [apiRouteTemplates.airportDepartures]: {
+    get: {
+      operationId: "getAirportDepartures",
+      summary: "Get cached departure board candidates for an airport",
+      parameters: [
+        airportCodeParameter,
+        {
+          name: "date",
+          in: "query",
+          required: false,
+          schema: {
+            type: "string",
+            format: "date",
+          },
+        },
+      ],
+      responses: airportBoardResponses,
+    },
+  },
+  [apiRouteTemplates.airportArrivals]: {
+    get: {
+      operationId: "getAirportArrivals",
+      summary: "Get cached arrival board candidates for an airport",
+      parameters: [
+        airportCodeParameter,
+        {
+          name: "date",
+          in: "query",
+          required: false,
+          schema: {
+            type: "string",
+            format: "date",
+          },
+        },
+      ],
+      responses: airportBoardResponses,
+    },
+  },
   [apiRouteTemplates.searchFlights]: {
     get: {
       operationId: "searchFlights",
