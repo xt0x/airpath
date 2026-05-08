@@ -19,5 +19,8 @@ jobs:
   terraform:
     uses: ./.github/workflows/ci-terraform.yml
 
+  security:
+    uses: ./.github/workflows/ci-security.yml
+
   workflows:
     uses: ./.github/workflows/ci-workflows.yml

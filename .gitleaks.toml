@@ -1,0 +1,12 @@
+title = "airpath Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "S3 object key field names are not API keys."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''services/internal/application/fetch_processor\.go''']
+regexTarget = "line"
+regexes = ['''\b(PlannedRouteS3Key|ActualTrackS3Key)\b''']
