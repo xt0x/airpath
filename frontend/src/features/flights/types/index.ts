@@ -2,6 +2,7 @@ export type {
   AltitudeChange,
   ApiError,
   ApiErrorCode,
+  ApiSchemaName,
   AirportBoardDirection,
   AirportBoardResponse,
   CacheFreshness,
