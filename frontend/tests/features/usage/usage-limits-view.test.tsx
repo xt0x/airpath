@@ -73,6 +73,24 @@ describe("UsageLimitsView", () => {
     expect(html).toContain("$4.50 / $4.00");
   });
 
+  it("does not report availability while an active rate limit is present", () => {
+    const html = renderToStaticMarkup(
+      <UsageLimitsView
+        state={{
+          kind: "ready",
+          status: usageStatus({
+            fetchingEnabled: true,
+            rateLimit: { limited: true, resetAt: null },
+          }),
+        }}
+      />,
+    );
+
+    expect(html).not.toContain("Available");
+    expect(html).not.toContain("Rate limit reset");
+    expect(html).toContain("Rate limit");
+  });
+
   it("keeps loading and error states free of removed usage details", () => {
     const loading = renderToStaticMarkup(<UsageLimitsView state={{ kind: "loading" }} />);
     const error = renderToStaticMarkup(

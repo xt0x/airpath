@@ -26,9 +26,10 @@ export function buildUsageStatusSummary(status: UsageStatusResponse): UsageStatu
       status.budget.softStopThreshold,
     ),
     stopReasons: stopReasons(status),
-    rateLimitResetLabel: status.rateLimit.limited
-      ? formatDisplayDateTime(status.rateLimit.resetAt)
-      : null,
+    rateLimitResetLabel:
+      status.rateLimit.limited && status.rateLimit.resetAt !== null
+        ? formatDisplayDateTime(status.rateLimit.resetAt)
+        : null,
     lastCheckedLabel: formatDisplayDateTime(status.cache.checkedAt),
     monthLabel: formatUsageMonthLabel(status.budget.month),
   };
