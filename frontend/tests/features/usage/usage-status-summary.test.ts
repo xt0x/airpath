@@ -29,9 +29,21 @@ describe("usage status summary", () => {
 
     expect(summary.budgetSummaryLabel).toBe("$4.50 / $4.00");
     expect(summary.budgetPercent).toBe(100);
-    expect(summary.stopReasons).toEqual(["Budget stop", "Rate limit"]);
+    expect(summary.stopReasons).toEqual(["Fetching paused", "Budget stop", "Rate limit"]);
     expect(summary.rateLimitResetLabel).toContain("2026");
     expect(summary.rateLimitResetLabel).not.toContain("T01:00:00Z");
+  });
+
+  it("reports paused fetching even when budget and rate limit are clear", () => {
+    const summary = buildUsageStatusSummary(
+      usageStatus({
+        fetchingEnabled: false,
+        budget: { stopped: false },
+        rateLimit: { limited: false, resetAt: null },
+      }),
+    );
+
+    expect(summary.stopReasons).toEqual(["Fetching paused"]);
   });
 
   it("omits the rate-limit reset label when the API does not provide a reset time", () => {
