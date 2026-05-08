@@ -37,6 +37,7 @@ export type MvpExcludedContract = (typeof mvpExcludedContracts)[number];
 
 export type CacheFreshness = "fresh" | "stale" | "miss";
 export type CacheSource = "cache" | "flightaware" | "local_accounting" | "derived";
+export type AirportBoardDirection = "departures" | "arrivals";
 export type { FlightIDType, PositionSource } from "./domain-types.js";
 export type MapSource =
   | "flightaware_route"
@@ -129,6 +130,14 @@ export interface Position {
 }
 
 export interface FlightSearchResponse {
+  items: FlightSummaryItem[];
+  cache: CacheMetadata;
+}
+
+export interface AirportBoardResponse {
+  airportCode: string;
+  direction: AirportBoardDirection;
+  date: string;
   items: FlightSummaryItem[];
   cache: CacheMetadata;
 }
