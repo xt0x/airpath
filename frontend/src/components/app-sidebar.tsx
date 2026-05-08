@@ -17,12 +17,19 @@ import {
 import { cn } from "@/lib/utils";
 
 const APP_SIDEBAR_MENU_BUTTON_CLASS_NAME =
-  "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:overflow-visible! group-data-[collapsible=icon]:bg-transparent";
+  "font-normal group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:overflow-visible! group-data-[collapsible=icon]:bg-transparent";
 const APP_SIDEBAR_IDENTITY_BUTTON_CLASS_NAME = cn(
   APP_SIDEBAR_MENU_BUTTON_CLASS_NAME,
   "hover:bg-transparent active:bg-transparent group-data-[collapsible=icon]:rounded-[4px]! group-data-[collapsible=icon]:overflow-hidden!",
 );
-const APP_SIDEBAR_COLLAPSED_LABEL_CLASS_NAME = "group-data-[collapsible=icon]:hidden";
+const APP_SIDEBAR_COLLAPSED_LABEL_CLASS_NAME =
+  "text-sm leading-5 font-normal group-data-[collapsible=icon]:hidden";
+
+function blurAfterPointerActivation(event: React.MouseEvent<HTMLButtonElement>) {
+  if (event.detail > 0) {
+    event.currentTarget.blur();
+  }
+}
 
 const data = {
   identity: {
@@ -146,8 +153,10 @@ function NavSections({
                     <button
                       type="button"
                       data-flight-search-trigger="true"
-                      onClick={onFlightSearchSelect}
-                      className="text-sm leading-5"
+                      onClick={(event) => {
+                        blurAfterPointerActivation(event);
+                        onFlightSearchSelect();
+                      }}
                     >
                       <item.icon />
                       <span className={APP_SIDEBAR_COLLAPSED_LABEL_CLASS_NAME}>{item.title}</span>
@@ -163,8 +172,10 @@ function NavSections({
                     <button
                       type="button"
                       data-tracked-flights-trigger="true"
-                      onClick={onTrackedFlightsSelect}
-                      className="text-sm leading-5"
+                      onClick={(event) => {
+                        blurAfterPointerActivation(event);
+                        onTrackedFlightsSelect();
+                      }}
                     >
                       <item.icon />
                       <span className={APP_SIDEBAR_COLLAPSED_LABEL_CLASS_NAME}>{item.title}</span>
