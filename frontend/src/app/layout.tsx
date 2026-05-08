@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
-import "./globals.css";
-import "../features/flights/flight-dashboard.css";
+import "@/app/globals.css";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const SHADCN_DARK_BACKGROUND = "oklch(0.145 0 0)";
 
 export const metadata: Metadata = {
   title: "Airpath",
@@ -13,8 +18,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
-      <body>{children}</body>
+    <html
+      lang="ja"
+      className={cn("dark font-sans", geist.variable)}
+      style={{ backgroundColor: SHADCN_DARK_BACKGROUND }}
+    >
+      <body style={{ backgroundColor: SHADCN_DARK_BACKGROUND }}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }

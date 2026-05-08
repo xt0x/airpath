@@ -30,7 +30,7 @@ export function routeEndpointFeatureCollection(
   mapData: FlightMapDataResponse | null,
   flight: FlightDetail | null,
 ): GeoJSON.FeatureCollection {
-  const plannedRouteFeature = flightAwarePlannedRouteFeature(mapData);
+  const plannedRouteFeature = drawableRouteLineFeature(flightAwarePlannedRouteFeature(mapData));
   if (flight === null || plannedRouteFeature === null) {
     return emptyFeatureCollection();
   }
