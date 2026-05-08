@@ -30,7 +30,7 @@
   },
   "nullableDisplay": {
     "missingReason": "not_applicable",
-    "expectedMissingLabel": "対象外",
+    "expectedMissingLabel": "Not applicable",
     "progress": 0,
     "expectedProgress": "0%"
   },

@@ -155,6 +155,22 @@ const flightSummarySchema = {
   },
 } as const;
 
+const airportBoardResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["airportCode", "direction", "date", "items", "cache"],
+  properties: {
+    airportCode: { type: "string" },
+    direction: { type: "string", enum: ["departures", "arrivals"] },
+    date: { type: "string", format: "date" },
+    items: {
+      type: "array",
+      items: { $ref: "#/components/schemas/FlightSummary" },
+    },
+    cache: { $ref: "#/components/schemas/CacheMetadata" },
+  },
+} as const;
+
 const flightDetailSchema = {
   type: "object",
   additionalProperties: false,
@@ -389,6 +405,7 @@ export const apiSchemas = {
       cache: { $ref: "#/components/schemas/CacheMetadata" },
     },
   },
+  AirportBoardResponse: airportBoardResponseSchema,
   FlightDetailResponse: {
     type: "object",
     additionalProperties: false,
@@ -457,6 +474,7 @@ export const apiSchemas = {
           "estimatedMonthToDateCost",
           "softStopThreshold",
           "stopped",
+          "dailyUsage",
         ],
         properties: {
           environment: { type: "string", minLength: 1 },
@@ -465,6 +483,19 @@ export const apiSchemas = {
           estimatedMonthToDateCost: { type: "number", minimum: 0 },
           softStopThreshold: { type: "number", minimum: 0 },
           stopped: { type: "boolean" },
+          dailyUsage: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["date", "estimatedCostUSD", "estimatedCallCount"],
+              properties: {
+                date: { type: "string", format: "date" },
+                estimatedCostUSD: { type: "number", minimum: 0 },
+                estimatedCallCount: { type: "integer", minimum: 0 },
+              },
+            },
+          },
         },
       },
       rateLimit: {

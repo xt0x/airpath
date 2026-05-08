@@ -192,6 +192,7 @@ export interface UsageStatusResponse {
     estimatedMonthToDateCost: number;
     softStopThreshold: number;
     stopped: boolean;
+    dailyUsage: UsageDailyStatus[];
   };
   rateLimit: {
     limited: boolean;
@@ -199,4 +200,10 @@ export interface UsageStatusResponse {
   };
   fetchingEnabled: boolean;
   cache: CacheMetadata;
+}
+
+export interface UsageDailyStatus {
+  date: string;
+  estimatedCostUSD: number;
+  estimatedCallCount: number;
 }

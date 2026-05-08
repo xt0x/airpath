@@ -1,4 +1,6 @@
 export const apiRouteTemplates = {
+  airportDepartures: "/v1/airports/{airportCode}/departures",
+  airportArrivals: "/v1/airports/{airportCode}/arrivals",
   searchFlights: "/v1/flights/search",
   flightDetail: "/v1/flights/{flightId}",
   flightMapData: "/v1/flights/{flightId}/map-data",
@@ -7,12 +9,22 @@ export const apiRouteTemplates = {
   usageStatus: "/v1/usage/status",
 } as const;
 
+export interface AirportBoardRouteQuery {
+  date?: string;
+}
+
 export interface FlightPositionsRouteQuery {
   since?: string;
   limit?: number;
 }
 
 export const apiRouteBuilders = {
+  airportDepartures(airportCode: string, query: AirportBoardRouteQuery = {}): string {
+    return withQuery(replaceAirportCode(apiRouteTemplates.airportDepartures, airportCode), query);
+  },
+  airportArrivals(airportCode: string, query: AirportBoardRouteQuery = {}): string {
+    return withQuery(replaceAirportCode(apiRouteTemplates.airportArrivals, airportCode), query);
+  },
   searchFlights(ident: string): string {
     return withQuery(apiRouteTemplates.searchFlights, { ident });
   },
@@ -32,6 +44,10 @@ export const apiRouteBuilders = {
     return apiRouteTemplates.usageStatus;
   },
 } as const;
+
+function replaceAirportCode(template: string, airportCode: string): string {
+  return template.replace("{airportCode}", encodeURIComponent(airportCode.trim().toUpperCase()));
+}
 
 function replaceFlightID(template: string, flightId: string): string {
   return template.replace("{flightId}", encodeURIComponent(flightId));

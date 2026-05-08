@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   Airport,
+  AirportBoardResponse,
   FlightDetailResponse,
   FlightMapDataResponse,
   FlightPositionsResponse,
@@ -24,6 +25,28 @@ describe("API response types", () => {
       items: [],
       cache,
     } satisfies FlightSearchResponse;
+
+    const departures = {
+      airportCode: "RJTT",
+      direction: "departures",
+      date: "2026-05-04",
+      items: [
+        {
+          flightId: "iflg_1",
+          flightIdType: "internal",
+          provisionalFlightLegId: null,
+          faFlightId: "fa_1",
+          ident: "ANA110",
+          identIata: "NH110",
+          origin: "RJTT",
+          destination: "KJFK",
+          scheduledOut: "2026-05-04T01:00:00Z",
+          legIndex: 0,
+          status: "Scheduled",
+        },
+      ],
+      cache,
+    } satisfies AirportBoardResponse;
 
     const mapData = {
       flightId: "iflg_1",
@@ -110,6 +133,7 @@ describe("API response types", () => {
         estimatedMonthToDateCost: 1,
         softStopThreshold: 4,
         stopped: false,
+        dailyUsage: [{ date: "2026-04-29", estimatedCostUSD: 0.25, estimatedCallCount: 25 }],
       },
       rateLimit: {
         limited: false,
@@ -120,10 +144,12 @@ describe("API response types", () => {
     } satisfies UsageStatusResponse;
 
     expect(search.items).toEqual([]);
+    expect(departures.direction).toBe("departures");
     expect(detail.route.source).toBe("flightaware_route");
     expect(mapData.current.source).toBe("flightaware_position");
     expect(positions.items[0]?.altitudeFeet).toBe(37000);
     expect(usage.budget.currency).toBe("USD");
+    expect(usage.budget.dailyUsage[0]?.estimatedCallCount).toBe(25);
   });
 
   it("derives duplicated API response value objects from the shared domain model", () => {
