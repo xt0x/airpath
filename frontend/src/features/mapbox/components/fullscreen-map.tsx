@@ -150,13 +150,13 @@ export function FullscreenMap({
       return;
     }
 
-    handledAircraftFocusRequestRef.current = aircraftFocusRequest;
     if (currentPosition !== null) {
       mapRef.current.flyTo({
         center: [currentPosition.longitude, currentPosition.latitude],
         essential: true,
         zoom: Math.max(mapRef.current.getZoom(), AIRCRAFT_FOCUS_ZOOM),
       });
+      handledAircraftFocusRequestRef.current = aircraftFocusRequest;
       return;
     }
 
@@ -169,6 +169,7 @@ export function FullscreenMap({
       maxZoom: AIRCRAFT_FOCUS_ZOOM,
       padding: ROUTE_FOCUS_PADDING,
     });
+    handledAircraftFocusRequestRef.current = aircraftFocusRequest;
   }, [aircraftFocusRequest, currentPosition, mapData, mapReady]);
 
   useEffect(() => {

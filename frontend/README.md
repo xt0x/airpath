@@ -21,14 +21,14 @@ Next.js-specific configuration, dependencies, and environment examples live at t
 - `src/features/mapbox/lib/aircraft-hover-card-formatters.ts`: Pure display helpers for current-aircraft hover-card metrics.
 - `src/features/mapbox/lib/geojson-coordinates.ts`: Reusable Mapbox-valid GeoJSON coordinate extraction for route rendering and camera bounds.
 - `src/features/mapbox/lib/map-layer-availability.ts`: Shared display eligibility rules for available map-layer GeoJSON and exact FlightAware planned routes.
-- `src/features/mapbox/lib/map-camera.ts`: Route-aware Mapbox bounds calculation for aircraft and route focus requests.
+- `src/features/mapbox/lib/map-camera.ts`: Route-aware Mapbox bounds calculation for aircraft and route focus requests, including antimeridian-safe longitude wrapping.
 - `src/features/mapbox/lib/map-route-layers.ts`: Native Mapbox route source and layer setup, deduplicated source data synchronization, and route paint repair after style redraws.
 - `src/features/mapbox/lib/route-line-feature.ts`: Reusable finite-coordinate route line normalization, current-position coordinate appending, and geometry eligibility shared by Mapbox line sources and route-focus camera bounds.
 - `src/features/mapbox/lib/route-layer-source-data.ts`: Pure transformation from selected flight map data into planned route, actual track, and endpoint FeatureCollections for Mapbox sources.
 - `src/features/flights/lib/public-flight-status.ts`: Normalizes public English-only upstream flight statuses before they reach search results, selected-flight summaries, or aircraft hover cards, including ASCII slash-separated status parts and an `Unknown` fallback for unsupported localized or blank display text.
 - `src/features/mapbox/lib/map-theme.ts`: Reusable Mapbox paint theme tokens and builders for route lines and endpoint labels.
 - `src/features/flights`: Non-UI flight feature code, currently limited to typed API adapters, public-status formatting, and re-exported public types. Frontend source imports flight API shapes through `src/features/flights/types`; the API client validates public contract enum values and numeric ranges before feature state consumes responses, while browser-initiated refresh requests use the shared `RefreshTaskType` subset, not the wider internal fetch queue task type.
-- `src/features/usage`: Usage & Limits UI that reads `/v1/usage/status` through the typed API client, keeps budget progress in the API cost card, shows the monthly usage chart by month without repeating the budget total in the chart header, and owns its feature-local `usage-workspace.module.css`.
+- `src/features/usage`: Usage & Limits UI that reads `/v1/usage/status` through the typed API client, keeps budget progress in the API cost card, shows availability only when no stop is active, reports paused fetching as a stop reason, shows API errors in an alert, shows the monthly usage chart by month without repeating the budget total in the chart header, and owns its feature-local `usage-workspace.module.css`.
 - `src/hooks/use-mobile.ts`: Shared 640px mobile breakpoint constant, pure width predicate, and `useSyncExternalStore`-based viewport hook used by the Sidebar.
 - `src/lib/display-date-time.ts`: Shared human-facing UTC date-time formatter for backend ISO timestamps.
 - `tests`: Frontend test code. Tests mirror the source area they verify and are not stored under `src`.
@@ -176,8 +176,9 @@ solid; both route lines use `map-theme.ts` paint builders with the same
 `#facc15` yellow as the aircraft marker and `line-emissive-strength`, so Mapbox
 Standard lighting cannot darken them in dark presets. The actual track display
 discards non-finite or out-of-range track coordinates before appending the available current
-aircraft position as the final coordinate, so the rendered track endpoint and
-route-focus bounds align with the aircraft marker without mutating cached
+aircraft position as the final coordinate, and appended current-position coordinates must
+also pass Mapbox longitude/latitude validation. Route-focus bounds unwrap longitudes across
+the antimeridian so transpacific route focus uses the shorter visible span without mutating cached
 backend data.
 Airport-to-airport fallback geometry, unavailable layer GeoJSON, and non-line
 route features are not rendered as planned or actual route lines and are not
@@ -232,7 +233,9 @@ retries detail/map-data reads when an actual track refresh was accepted but
 track GeoJSON is not ready yet, then closes the search panel and asks Mapbox to focus the aircraft
 when current position data is available. If no current position is available,
 Mapbox fits the viewport to the selected planned route, actual track, and
-current-position GeoJSON bounds. The panel displays normalized flight summary
+current-position GeoJSON bounds. Focus requests remain pending until either
+current position coordinates or route bounds are usable, so an early request is
+not dropped while selected-flight map data is still loading. The panel displays normalized flight summary
 facts, shows current position metrics when available, and summarizes data
 freshness as user-facing updated/outdated copy instead of exposing cache source,
 checked, stale, and expiry metadata.
@@ -274,8 +277,10 @@ The `/usage` route renders the Usage & Limits workflow inside the same sidebar
 shell as the map. It fetches usage status in the browser through
 `AirpathApiClient.getUsageStatus()`. The visible screen keeps only operator
 decision data: month-to-date cost against soft stop, stop reason, rate-limit
-reset time when limited, last checked timestamp in the shared UTC display format,
-and monthly API usage cost.
+reset time when the API provides one, availability when fetching is enabled with
+no active fetching pause, budget stop, or rate-limit stop, user-facing API
+errors, last checked timestamp in the shared UTC display format, and monthly API
+usage cost.
 `estimatedMonthToDateCost` is visualized as a single monthly bar with the UTC
 last checked timestamp below it; budget consumption is shown as numbers and a
 progress indicator.
