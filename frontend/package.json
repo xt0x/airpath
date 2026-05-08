@@ -15,9 +15,14 @@
   "dependencies": {
     "@airpath/map-rendering": "workspace:*",
     "@airpath/shared-types": "workspace:*",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.14.0",
+    "mapbox-gl": "^3.23.1",
     "next": "^16.0.10",
+    "radix-ui": "^1.4.3",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.2",

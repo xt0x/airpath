@@ -7,7 +7,6 @@ export type {
   CacheFreshness,
   CacheMetadata,
   CacheSource,
-  FetchTaskType,
   FlightDetail,
   FlightDetailResponse,
   FlightIDType,

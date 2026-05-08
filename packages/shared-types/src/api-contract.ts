@@ -15,6 +15,8 @@ export {
 export type {
   ApiError,
   ApiErrorCode,
+  AirportBoardDirection,
+  AirportBoardResponse,
   Airport,
   CacheFreshness,
   CacheMetadata,

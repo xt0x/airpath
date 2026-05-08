@@ -4,9 +4,9 @@ SHELL := /bin/bash
 GO := env -u GOROOT go
 TERRAFORM ?= terraform
 
-.PHONY: help lint test build check format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-test terraform-policy terraform-check workflow-lint ci
+.PHONY: help lint test build check format lambda-artifacts terraform-fmt terraform-lint terraform-validate terraform-test terraform-policy terraform-check workflow-lint gitleaks ci
 .PHONY: pnpm-install pnpm-lint pnpm-typecheck pnpm-test pnpm-build go-fmt go-vet go-test go-build go-lint
-.PHONY: ci-ts ci-go ci-terraform
+.PHONY: ci-ts ci-go ci-terraform ci-security
 
 help:
 	@printf '%s\n' \
@@ -16,6 +16,7 @@ help:
 		'  make build             Run build checks' \
 		'  make check             Run local development checks' \
 		'  make ci                Run the pull request gate locally' \
+		'  make gitleaks          Scan Git history for committed secrets' \
 		'  make lambda-artifacts  Build dev Lambda zip artifacts' \
 		'  make format            Format supported files' \
 		'  make terraform-test    Run native Terraform module and root tests' \
@@ -78,10 +79,16 @@ ci-go:
 ci-terraform:
 	$(MAKE) terraform-check
 
+ci-security:
+	$(MAKE) gitleaks
+
 workflow-lint:
 	$(GO) run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
-ci: ci-ts ci-go ci-terraform workflow-lint
+gitleaks:
+	gitleaks git --redact --verbose .
+
+ci: ci-ts ci-go ci-terraform ci-security workflow-lint
 
 format:
 	pnpm run format
