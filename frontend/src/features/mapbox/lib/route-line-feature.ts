@@ -28,6 +28,11 @@ export function drawableRouteLineFeatureWithAppendedCoordinate(
   feature: GeoJSONFeature | null,
   coordinate: [number, number],
 ): GeoJSONFeature | null {
+  const appendedCoordinate = coordinatePairFromValue(coordinate);
+  if (appendedCoordinate === null) {
+    return null;
+  }
+
   if (feature === null) {
     return null;
   }
@@ -41,7 +46,7 @@ export function drawableRouteLineFeatureWithAppendedCoordinate(
             ...feature,
             geometry: {
               ...feature.geometry,
-              coordinates: appendCoordinate(coordinates, coordinate),
+              coordinates: appendCoordinate(coordinates, appendedCoordinate),
             },
           },
     );
@@ -58,7 +63,7 @@ export function drawableRouteLineFeatureWithAppendedCoordinate(
     if (lastSegment === undefined) {
       return null;
     }
-    nextCoordinates[lastSegmentIndex] = appendCoordinate(lastSegment, coordinate);
+    nextCoordinates[lastSegmentIndex] = appendCoordinate(lastSegment, appendedCoordinate);
     return drawableRouteLineFeature({
       ...feature,
       geometry: {

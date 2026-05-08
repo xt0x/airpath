@@ -30,13 +30,14 @@ export function boundsFromMapData(
     ...coordinatesFromFeature(actualTrackFeature),
     ...coordinatesFromFeature(currentOnlyFeature),
   ];
-  const firstCoordinate = coordinates[0];
+  const boundsCoordinates = coordinatesWithWrappedLongitudes(coordinates);
+  const firstCoordinate = boundsCoordinates[0];
   if (firstCoordinate === undefined) {
     return null;
   }
 
   const bounds = new mapboxGL.LngLatBounds(firstCoordinate, firstCoordinate);
-  for (const coordinate of coordinates.slice(1)) {
+  for (const coordinate of boundsCoordinates.slice(1)) {
     bounds.extend(coordinate);
   }
   return bounds;
@@ -46,4 +47,31 @@ function coordinatesFromFeature(
   feature: FlightMapDataResponse["planned"]["geojson"],
 ): [number, number][] {
   return collectFiniteCoordinatePairs(feature?.geometry.coordinates);
+}
+
+function coordinatesWithWrappedLongitudes(coordinates: [number, number][]): [number, number][] {
+  const firstCoordinate = coordinates[0];
+  if (firstCoordinate === undefined) {
+    return [];
+  }
+
+  const wrappedCoordinates: [number, number][] = [firstCoordinate];
+  let previousLongitude = firstCoordinate[0];
+  for (const [rawLongitude, latitude] of coordinates.slice(1)) {
+    const longitude = longitudeNearestToPrevious(rawLongitude, previousLongitude);
+    wrappedCoordinates.push([longitude, latitude]);
+    previousLongitude = longitude;
+  }
+  return wrappedCoordinates;
+}
+
+function longitudeNearestToPrevious(longitude: number, previousLongitude: number): number {
+  let wrappedLongitude = longitude;
+  while (wrappedLongitude - previousLongitude > 180) {
+    wrappedLongitude -= 360;
+  }
+  while (wrappedLongitude - previousLongitude < -180) {
+    wrappedLongitude += 360;
+  }
+  return wrappedLongitude;
 }

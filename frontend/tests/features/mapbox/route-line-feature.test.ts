@@ -74,6 +74,24 @@ describe("route line feature", () => {
     );
   });
 
+  it("rejects appended coordinates that Mapbox cannot draw", () => {
+    expect(
+      drawableRouteLineFeatureWithAppendedCoordinate(lineFeature([[139.7, 35.6]]), [
+        Number.NaN,
+        35.9,
+      ]),
+    ).toBeNull();
+    expect(
+      drawableRouteLineFeatureWithAppendedCoordinate(
+        lineFeature([
+          [139.7, 35.6],
+          [140.1, 35.8],
+        ]),
+        [181, 35.9],
+      ),
+    ).toBeNull();
+  });
+
   it("appends to the last drawable MultiLineString segment without duplicating its endpoint", () => {
     expect(
       drawableRouteLineFeatureWithAppendedCoordinate(

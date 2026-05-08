@@ -23,7 +23,7 @@ describe("map camera", () => {
     ).toBeNull();
   });
 
-  it("builds bounds from planned, actual, and current route coordinates", () => {
+  it("builds wrapped bounds from planned, actual, and current route coordinates", () => {
     const bounds = boundsFromMapData(
       mapData({
         planned: {
@@ -57,11 +57,35 @@ describe("map camera", () => {
       extended: [
         [139.7, 35.6],
         [170.1, 48.2],
-        [-120.3, 51.2],
-        [-90.4, 45.1],
-        [-73.8, 40.6],
+        [239.7, 51.2],
+        [269.6, 45.1],
+        [286.2, 40.6],
       ],
       first: [139.7, 35.6],
+    });
+  });
+
+  it("keeps antimeridian-crossing route focus bounds on the shorter wrapped span", () => {
+    const bounds = boundsFromMapData(
+      mapData({
+        planned: {
+          source: "flightaware_route",
+          available: true,
+          geojson: lineFeature([
+            [170, 35.6],
+            [-170, 40.6],
+          ]),
+        },
+      }),
+      fakeMapboxGL(),
+    );
+
+    expect(bounds).toEqual({
+      extended: [
+        [170, 35.6],
+        [190, 40.6],
+      ],
+      first: [170, 35.6],
     });
   });
 
