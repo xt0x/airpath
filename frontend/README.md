@@ -131,10 +131,11 @@ to the Live Map workspace action when rendered inside `MapWorkspace`; pressing
 it does not navigate to another page and instead opens the existing search
 panel in the current map view. Outside the Live Map workspace, the same menu
 item links to `/?flightSearch=1`; `MapWorkspace` reads that query on mount and
-opens the search panel after returning home. The action button applies
-the same explicit text size and line height as the anchor-backed menu items so
-`Flight Search` does not render larger than the rest of the sidebar. `Tracked
-Flights` follows the same action pattern inside `MapWorkspace`: it closes the
+opens the search panel after returning home. Action-backed and anchor-backed
+menu items both rely on `SidebarMenuButton` for typography so `Flight Search`
+does not render larger than the rest of the sidebar, and active state uses color
+and background without increasing font weight. `Tracked Flights` follows the
+same action pattern inside `MapWorkspace`: it closes the
 search panel, marks the sidebar item active, and requests the Mapbox camera to
 fly to the current tracked aircraft coordinates. Outside the Live Map
 workspace, it links back to `/?trackedFlights=1` so the home route can perform

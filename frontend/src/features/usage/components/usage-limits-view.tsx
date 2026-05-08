@@ -41,7 +41,11 @@ const usageCostChartConfig = {
 } satisfies ChartConfig;
 
 export function UsageLimitsView({ state }: { state: UsageLimitsViewState }) {
-  const showAvailable = state.kind === "ready" && state.status.fetchingEnabled;
+  const showAvailable =
+    state.kind === "ready" &&
+    state.status.fetchingEnabled &&
+    !state.status.budget.stopped &&
+    !state.status.rateLimit.limited;
 
   return (
     <main className="usage-limits" aria-busy={state.kind === "loading" ? "true" : undefined}>

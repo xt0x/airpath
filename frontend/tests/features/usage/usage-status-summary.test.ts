@@ -34,6 +34,17 @@ describe("usage status summary", () => {
     expect(summary.rateLimitResetLabel).not.toContain("T01:00:00Z");
   });
 
+  it("omits the rate-limit reset label when the API does not provide a reset time", () => {
+    const summary = buildUsageStatusSummary(
+      usageStatus({
+        rateLimit: { limited: true, resetAt: null },
+      }),
+    );
+
+    expect(summary.stopReasons).toEqual(["Rate limit"]);
+    expect(summary.rateLimitResetLabel).toBeNull();
+  });
+
   it("builds monthly API usage cost chart data for the usage month", () => {
     const data = buildMonthlyCostChartData(usageStatus());
 
