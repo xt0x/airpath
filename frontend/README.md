@@ -7,7 +7,7 @@ Next.js-specific configuration, dependencies, and environment examples live at t
 ## Structure
 
 - `package.json`: Package metadata and scripts for the frontend app.
-- `src/app`: Next.js App Router routes, layouts, and global Mapbox/sidebar CSS import.
+- `src/app`: Next.js App Router routes, layouts, and global Mapbox GL/sidebar CSS import.
 - `components.json`: shadcn registry configuration using the `radix-nova` style.
 - `src/components/app-sidebar.tsx`: Application sidebar composition following `docs/slidebar.md`, including the static Airpath Ops identity, backend-aligned navigation groups, and rail.
 - `src/components/ui`: shadcn CLI generated components from `components.json` using the `radix-nova` style. Keep this directory reserved for generated shadcn files; Airpath-specific behavior belongs in callers, feature components, or feature CSS.
@@ -17,7 +17,7 @@ Next.js-specific configuration, dependencies, and environment examples live at t
 - `src/features/map-workspace`: Live Map workspace shell that composes the icon-collapsible application sidebar, airport-board discovery, secondary flight-number search, selected-flight controls, user-facing data status, refresh controls, SidebarInset, fullscreen map, the hidden/sidebar-aligned Flight Search state, and its feature-local `map-workspace.module.css`.
 - `src/features/map-workspace/lib/airport-board-controls.ts`: Airport selector options, airport code display labels, and date-only board helpers.
 - `src/features/map-workspace/lib/flight-search-selection.ts`: Pure first-result selection rule for loading a flight-number search result on the map.
-- `src/features/mapbox`: Fullscreen Mapbox UI surface with native Mapbox route line layers, route endpoint labels, and current-aircraft marker rendering.
+- `src/features/mapbox`: Fullscreen Mapbox UI surface with native Mapbox route line layers, route endpoint labels, current-aircraft marker rendering, and feature-local `fullscreen-map.module.css` presentation for the marker, hover card, and missing-token notice.
 - `src/features/mapbox/lib/aircraft-hover-card-formatters.ts`: Pure display helpers for current-aircraft hover-card metrics.
 - `src/features/mapbox/lib/geojson-coordinates.ts`: Reusable Mapbox-valid GeoJSON coordinate extraction for route rendering and camera bounds.
 - `src/features/mapbox/lib/map-layer-availability.ts`: Shared display eligibility rules for available map-layer GeoJSON and exact FlightAware planned routes.
@@ -115,10 +115,13 @@ the icon rail, and menu buttons use explicit collapsed padding, overflow, and
 transparent-background classes instead of global generated `data-slot`
 overrides. The generated Sidebar primitive stays in
 `src/components/ui/sidebar.tsx`, matching shadcn's direct `components/ui/<component>.tsx`
-layout. Live Map search-panel styles live in
-`src/features/map-workspace/components/map-workspace.module.css`, and Usage
-layout styles live in `src/features/usage/components/usage-workspace.module.css`;
-`globals.css` must not contain `live-map-panel` or `usage-*` selectors.
+layout. FullscreenMap marker, hover-card, and missing-token notice styles live
+in `src/features/mapbox/components/fullscreen-map.module.css`; Live Map
+search-panel styles live in
+`src/features/map-workspace/components/map-workspace.module.css`; and Usage
+layout styles live in `src/features/usage/components/usage-workspace.module.css`.
+`globals.css` must not contain `live-map-panel`, `usage-*`, or FullscreenMap
+presentation selectors.
 
 The main sidebar navigation is grouped by backend-supported workflows:
 `Workspace` contains `Live Map`, `Flight Search`, and `Tracked Flights`; `Data`

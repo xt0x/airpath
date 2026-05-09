@@ -11,6 +11,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { FlightMapDataResponse } from "@/features/flights/types";
 import { FullscreenMap } from "@/features/mapbox/components/fullscreen-map";
 
+const GLOBAL_CSS_PATH = "src/app/globals.css";
+const FULLSCREEN_MAP_CSS_PATH = "src/features/mapbox/components/fullscreen-map.module.css";
+
 const mapboxMock = vi.hoisted(() => {
   const instances: FakeMapboxMap[] = [];
 
@@ -139,21 +142,34 @@ describe("fullscreen Mapbox UI", () => {
       />,
     );
 
-    expect(html).toContain('class="mapbox-screen"');
+    expect(html).toMatch(/class="[^"]*\bmapbox-screen\b[^"]*"/);
     expect(html).toContain('class="mapbox-screen__canvas"');
   });
 
   it("keeps a shared map surface background token in global CSS", () => {
-    const css = readFileSync("src/app/globals.css", "utf8");
+    const css = readFileSync(GLOBAL_CSS_PATH, "utf8");
 
     expect(css).toContain("--map-surface-background");
     expect(css).not.toContain("--map-surface-background: #d7dde4");
   });
 
   it("does not reapply the generic white app background during reload", () => {
-    const css = readFileSync("src/app/globals.css", "utf8");
+    const css = readFileSync(GLOBAL_CSS_PATH, "utf8");
 
     expect(css).not.toContain("@apply bg-background text-foreground");
+  });
+
+  it("keeps FullscreenMap component presentation outside the global stylesheet", () => {
+    const globalCss = readFileSync(GLOBAL_CSS_PATH, "utf8");
+    const mapCss = readFileSync(FULLSCREEN_MAP_CSS_PATH, "utf8");
+
+    expect(globalCss).not.toContain(".mapbox-screen__notice");
+    expect(globalCss).not.toContain(".mapbox-screen__aircraft-marker");
+    expect(globalCss).not.toContain(".mapbox-screen__aircraft-hover-card");
+    expect(mapCss).toContain(".mapbox-screen__notice");
+    expect(mapCss).toContain(".mapbox-screen__aircraft-marker");
+    expect(mapCss).toContain(".mapbox-screen__aircraft-hover-card");
+    expect(mapCss).not.toContain("--aircraft-heading");
   });
 
   it("exposes the configured Mapbox style URL on the map surface", () => {

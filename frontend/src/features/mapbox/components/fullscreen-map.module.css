@@ -1,0 +1,98 @@
+.styleScope {
+  --fullscreen-map-style-scope: 1;
+}
+
+:global(.mapbox-screen__notice) {
+  position: absolute;
+  z-index: 1;
+  left: 16px;
+  bottom: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid #c9d1d9;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 92%);
+  color: #1f2933;
+  font:
+    600 14px/1.4 system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  padding: 10px 12px;
+  box-shadow: 0 6px 24px rgb(15 23 42 / 14%);
+}
+
+:global(.mapbox-screen__aircraft-marker) {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  background: transparent;
+}
+
+:global(.mapbox-screen__aircraft-marker-icon) {
+  width: 1.45rem;
+  height: 1.45rem;
+  color: var(--airpath-map-aircraft-marker);
+  fill: var(--airpath-map-aircraft-marker);
+  filter: drop-shadow(0 2px 5px rgb(0 0 0 / 45%));
+  stroke-width: 2.4;
+}
+
+:global(.mapbox-screen__aircraft-marker-host) {
+  cursor: pointer;
+}
+
+:global(.mapbox-screen__aircraft-marker[data-has-heading="false"]) {
+  opacity: 0.88;
+}
+
+:global(.mapbox-screen__aircraft-hover-card) {
+  width: 18rem;
+  border-radius: 4px;
+}
+
+:global(.mapbox-screen__aircraft-card-header) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+:global(.mapbox-screen__aircraft-card-title) {
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+:global(.mapbox-screen__aircraft-card-route) {
+  color: var(--muted-foreground);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+:global(.mapbox-screen__aircraft-card-grid) {
+  display: grid;
+  gap: 0.35rem;
+}
+
+:global(.mapbox-screen__aircraft-card-fact) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+:global(.mapbox-screen__aircraft-card-fact strong) {
+  max-width: 11rem;
+  overflow: hidden;
+  color: var(--popover-foreground);
+  font-weight: 550;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
