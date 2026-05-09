@@ -71,12 +71,21 @@ The Live Map uses the same API base URL for
 `/v1/flights/{flightId}`, `/v1/flights/{flightId}/map-data`,
 `/v1/flights/{flightId}/positions`, and `/v1/flights/{flightId}/refresh`.
 Airport boards are the primary discovery path; flight-number search remains as a
-fallback. A flight-number search automatically selects its first result and
+fallback. Airport board results stay idle until the user presses `Show on map` on
+a candidate. A flight-number search automatically selects its first result and
 loads refresh/detail/map-data for that flight so the route can appear without a
-second click. Flight-number search results come from the API in `scheduledOut`
-ascending order. Position history is exposed in the client for future history
-toggles, but the default map renders only the selected flight's planned route,
-actual track, and current position.
+second click. When a flight-number search succeeds with no matches, the panel
+shows the result empty state and clears the selected-flight summary.
+Pending flight-number searches, airport board loads, selected-flight loads, and
+manual refreshes are ignored after the user changes board criteria, clears
+selection, starts another discovery request, explicitly opens a board candidate,
+or switches to Tracked Flights, so stale responses cannot restore cleared flight
+details, stale board candidates, or map focus later. Track hydration retries also
+stop once their selected-flight load or manual refresh has been invalidated.
+Flight-number search results come from the API in `scheduledOut` ascending order.
+Position history is exposed in the client for future history toggles, but the
+default map renders only the selected flight's planned route, actual track, and
+current position.
 
 `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is required for the browser map. Use a
 publishable Mapbox token only; do not put secret Mapbox tokens or backend
@@ -206,8 +215,9 @@ actions, shadcn `Input` for the flight-number fallback, shadcn `Badge` for
 compact flight-data status labels, and shadcn `Spinner` for pending
 `Show on map` feedback. The normal Live Map state does not render the
 search panel. Pressing `Flight Search` in the sidebar switches the same
-workspace to the search state, marks that sidebar action active, and
-horizontally centers the search box within the visible map area. Its top edge
+workspace to the search state, marks that sidebar action active while the panel
+is visible, clears that active state after close, and horizontally centers the
+search box within the visible map area. Its top edge
 aligns with the Live Map menu hover row: `6.5rem` from the top when the sidebar
 is expanded and `4.5rem` when the sidebar is collapsed. The panel opens and
 closes with matching 420ms animations; closing keeps the panel mounted in a

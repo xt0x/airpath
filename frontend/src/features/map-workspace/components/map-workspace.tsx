@@ -101,6 +101,10 @@ export function MapWorkspace({
   );
   const searchPanelRef = useRef<HTMLElement | null>(null);
   const searchPanelCloseTimerRef = useRef<number | null>(null);
+  const flightLoadRequestRef = useRef(0);
+  const refreshRequestRef = useRef(0);
+  const searchRequestRef = useRef(0);
+  const airportBoardRequestRef = useRef(0);
   const [airportCode, setAirportCode] = useState(
     initialAirportBoardResponse?.airportCode ?? initialDetail?.flight.origin.code ?? "RJTT",
   );
@@ -122,10 +126,11 @@ export function MapWorkspace({
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(
     initialDetail?.flight.flightId ??
       initialMapData?.flightId ??
-      initialAirportBoardResponse?.items[0]?.flightId ??
       initialOrderedSearchResponse?.items[0]?.flightId ??
       null,
   );
+  const selectedFlightIdRef = useRef(selectedFlightId);
+  selectedFlightIdRef.current = selectedFlightId;
   const [detail, setDetail] = useState<FlightDetailResponse | null>(initialDetail);
   const [mapData, setMapData] = useState<FlightMapDataResponse | null>(initialMapData);
   const [usageStatus, setUsageStatus] = useState<UsageStatusResponse | null>(initialUsageStatus);
@@ -175,9 +180,21 @@ export function MapWorkspace({
     setSearchPanelPlacement("closing");
     searchPanelCloseTimerRef.current = window.setTimeout(() => {
       setSearchPanelPlacement("hidden");
+      setActiveSidebarAction(undefined);
       searchPanelCloseTimerRef.current = null;
     }, SEARCH_PANEL_ANIMATION_MS);
   }, [clearSearchPanelCloseTimer]);
+
+  const invalidatePendingFlightRequests = useCallback(() => {
+    flightLoadRequestRef.current += 1;
+    refreshRequestRef.current += 1;
+    searchRequestRef.current += 1;
+    airportBoardRequestRef.current += 1;
+    setFlightDataRequest(flightLoadRequestRef.current);
+    setPendingMapRevealFlightId(null);
+    setRequestLoading(false);
+    setRefreshing(false);
+  }, []);
 
   const toggleSearchPanel = useCallback(() => {
     if (searchPanelPlacement === "centered") {
@@ -190,10 +207,11 @@ export function MapWorkspace({
 
   const handleTrackedFlightsSelect = useCallback(() => {
     clearSearchPanelCloseTimer();
+    invalidatePendingFlightRequests();
     setSearchPanelPlacement("hidden");
     setActiveSidebarAction("tracked-flights");
     setAircraftFocusRequest((request) => request + 1);
-  }, [clearSearchPanelCloseTimer]);
+  }, [clearSearchPanelCloseTimer, invalidatePendingFlightRequests]);
 
   useEffect(() => {
     return () => {
@@ -310,11 +328,57 @@ export function MapWorkspace({
   }, [closeSearchPanel, searchPanelPlacement]);
 
   function clearAirportBoardSelection() {
+    invalidatePendingFlightRequests();
     setAirportBoard(null);
     setSelectedFlightId(null);
     setDetail(null);
     setMapData(null);
     setErrorMessage(null);
+  }
+
+  function nextFlightLoadRequest() {
+    flightLoadRequestRef.current += 1;
+    refreshRequestRef.current += 1;
+    searchRequestRef.current += 1;
+    setFlightDataRequest(flightLoadRequestRef.current);
+    return flightLoadRequestRef.current;
+  }
+
+  function nextSearchRequest() {
+    searchRequestRef.current += 1;
+    flightLoadRequestRef.current += 1;
+    refreshRequestRef.current += 1;
+    setFlightDataRequest(flightLoadRequestRef.current);
+    return searchRequestRef.current;
+  }
+
+  function nextAirportBoardRequest() {
+    airportBoardRequestRef.current += 1;
+    flightLoadRequestRef.current += 1;
+    refreshRequestRef.current += 1;
+    setFlightDataRequest(flightLoadRequestRef.current);
+    return airportBoardRequestRef.current;
+  }
+
+  function nextRefreshRequest() {
+    refreshRequestRef.current += 1;
+    return refreshRequestRef.current;
+  }
+
+  function flightLoadRequestIsCurrent(request: number) {
+    return flightLoadRequestRef.current === request;
+  }
+
+  function refreshRequestIsCurrent(request: number, flightId: string) {
+    return refreshRequestRef.current === request && selectedFlightIdRef.current === flightId;
+  }
+
+  function searchRequestIsCurrent(request: number) {
+    return searchRequestRef.current === request;
+  }
+
+  function airportBoardRequestIsCurrent(request: number) {
+    return airportBoardRequestRef.current === request;
   }
 
   function selectBoardDirection(nextDirection: AirportBoardDirection) {
@@ -342,18 +406,21 @@ export function MapWorkspace({
   }
 
   async function loadFlightOnMap(flightId: string, options: LoadFlightOnMapOptions) {
+    const request = nextFlightLoadRequest();
     if (options.showCandidatePending) {
       setPendingMapRevealFlightId(flightId);
     }
-    setFlightDataRequest((request) => request + 1);
     setRequestLoading(true);
     setErrorMessage(null);
     try {
       const refreshResponse = await client.requestFlightRefresh(flightId, [...REFRESH_TASKS]);
-      const { detail: nextDetail, mapData: nextMapData } = await loadFlightPayloadAfterRefresh(
-        flightId,
-        refreshResponse,
+      const payload = await loadFlightPayloadAfterRefresh(flightId, refreshResponse, () =>
+        flightLoadRequestIsCurrent(request),
       );
+      if (payload === null || !flightLoadRequestIsCurrent(request)) {
+        return;
+      }
+      const { detail: nextDetail, mapData: nextMapData } = payload;
       setSelectedFlightId(flightId);
       setDetail(nextDetail);
       setMapData(nextMapData);
@@ -369,12 +436,17 @@ export function MapWorkspace({
         setAircraftFocusRequest((request) => request + 1);
       }
     } catch (error) {
+      if (!flightLoadRequestIsCurrent(request)) {
+        return;
+      }
       if (options.showCandidatePending) {
         setPendingMapRevealFlightId(null);
       }
       setErrorMessage(errorLabel(error));
     } finally {
-      setRequestLoading(false);
+      if (flightLoadRequestIsCurrent(request)) {
+        setRequestLoading(false);
+      }
     }
   }
 
@@ -389,15 +461,31 @@ export function MapWorkspace({
   async function loadFlightPayloadAfterRefresh(
     flightId: string,
     refreshResponse: FlightRefreshResponse,
-  ): Promise<{ detail: FlightDetailResponse; mapData: FlightMapDataResponse }> {
+    shouldContinue: () => boolean,
+  ): Promise<{ detail: FlightDetailResponse; mapData: FlightMapDataResponse } | null> {
+    if (!shouldContinue()) {
+      return null;
+    }
     let payload = await loadFlightPayload(flightId);
+    if (!shouldContinue()) {
+      return null;
+    }
     if (!refreshAcceptedTrackTask(refreshResponse) || payload.mapData.actual.available) {
       return payload;
     }
 
     for (const delayMs of TRACK_HYDRATION_RETRY_DELAYS_MS) {
+      if (!shouldContinue()) {
+        return null;
+      }
       await waitForTrackHydration(delayMs);
+      if (!shouldContinue()) {
+        return null;
+      }
       payload = await loadFlightPayload(flightId);
+      if (!shouldContinue()) {
+        return null;
+      }
       if (payload.mapData.actual.available) {
         return payload;
       }
@@ -423,14 +511,19 @@ export function MapWorkspace({
       return;
     }
 
+    const request = nextSearchRequest();
     setRequestLoading(true);
     setErrorMessage(null);
     try {
       const response = await client.searchFlights(trimmed);
+      if (!searchRequestIsCurrent(request)) {
+        return;
+      }
       const orderedResponse = sortFlightSearchResponseByScheduledOut(response);
       setSearchResponse(orderedResponse);
       const firstResultFlightId = firstOrderedSearchResultFlightId(orderedResponse);
       if (firstResultFlightId === null) {
+        invalidatePendingFlightRequests();
         setSelectedFlightId(null);
         setDetail(null);
         setMapData(null);
@@ -442,9 +535,14 @@ export function MapWorkspace({
         showCandidatePending: false,
       });
     } catch (error) {
+      if (!searchRequestIsCurrent(request)) {
+        return;
+      }
       setErrorMessage(errorLabel(error));
     } finally {
-      setRequestLoading(false);
+      if (searchRequestIsCurrent(request)) {
+        setRequestLoading(false);
+      }
     }
   }
 
@@ -456,10 +554,14 @@ export function MapWorkspace({
       return;
     }
 
+    const request = nextAirportBoardRequest();
     setRequestLoading(true);
     setErrorMessage(null);
     try {
       const response = await client.getAirportBoard(trimmed, boardDirection, { date: boardDate });
+      if (!airportBoardRequestIsCurrent(request)) {
+        return;
+      }
       setAirportBoard(response);
       if (response.items.length === 0) {
         setSelectedFlightId(null);
@@ -467,10 +569,15 @@ export function MapWorkspace({
         setMapData(null);
       }
     } catch (error) {
+      if (!airportBoardRequestIsCurrent(request)) {
+        return;
+      }
       setAirportBoard(null);
       setErrorMessage(errorLabel(error));
     } finally {
-      setRequestLoading(false);
+      if (airportBoardRequestIsCurrent(request)) {
+        setRequestLoading(false);
+      }
     }
   }
 
@@ -479,22 +586,30 @@ export function MapWorkspace({
       return;
     }
 
+    const flightId = selectedFlightId;
+    const request = nextRefreshRequest();
     setRefreshing(true);
     setErrorMessage(null);
     try {
-      const refreshResponse = await client.requestFlightRefresh(selectedFlightId, [
-        ...REFRESH_TASKS,
-      ]);
-      const { detail: nextDetail, mapData: nextMapData } = await loadFlightPayloadAfterRefresh(
-        selectedFlightId,
-        refreshResponse,
+      const refreshResponse = await client.requestFlightRefresh(flightId, [...REFRESH_TASKS]);
+      const payload = await loadFlightPayloadAfterRefresh(flightId, refreshResponse, () =>
+        refreshRequestIsCurrent(request, flightId),
       );
+      if (payload === null || !refreshRequestIsCurrent(request, flightId)) {
+        return;
+      }
+      const { detail: nextDetail, mapData: nextMapData } = payload;
       setDetail(nextDetail);
       setMapData(nextMapData);
     } catch (error) {
+      if (!refreshRequestIsCurrent(request, flightId)) {
+        return;
+      }
       setErrorMessage(errorLabel(error));
     } finally {
-      setRefreshing(false);
+      if (refreshRequestIsCurrent(request, flightId)) {
+        setRefreshing(false);
+      }
     }
   }
 
@@ -690,7 +805,7 @@ export function MapWorkspace({
               </p>
             </form>
 
-            {searchResponse !== null && searchResponse.items.length > 0 ? (
+            {searchResponse !== null ? (
               <FlightCandidateList
                 label="Flight number results"
                 items={searchResponse.items}

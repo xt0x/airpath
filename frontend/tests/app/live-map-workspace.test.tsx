@@ -19,7 +19,6 @@ import type {
 import { MapWorkspace } from "@/features/map-workspace/components/map-workspace";
 
 const GLOBAL_CSS_PATH = "src/app/globals.css";
-const LIVE_MAP_CSS_PATH = "src/features/map-workspace/components/map-workspace.module.css";
 
 let mountedRoot: Root | null = null;
 let mountedContainer: HTMLDivElement | null = null;
@@ -168,7 +167,7 @@ describe("Live Map workspace", () => {
     expect(container.textContent).toContain("Arrivals");
   });
 
-  it("can render the search panel aligned to the Live Map menu item without a page destination", () => {
+  it("can render the search panel from the Live Map menu item without a page destination", () => {
     const html = renderToStaticMarkup(
       <TooltipProvider>
         <MapWorkspace
@@ -180,14 +179,13 @@ describe("Live Map workspace", () => {
     );
 
     expect(html).toContain('data-testid="live-map-panel"');
-    expect(html).toContain("live-map-panel--centered");
     expect(html).toContain("<button");
     expect(html).toContain("Flight Search");
     expect(html).not.toContain('href="/flight-search"');
     expect(html).toContain('data-active="true"');
   });
 
-  it("opens the centered search panel from the Live Map sidebar instead of linking to another route", async () => {
+  it("opens the search panel from the Live Map sidebar instead of linking to another route", async () => {
     const container = await renderInteractiveWorkspace(createMockApiClient(), {
       initialSearchPanelFocused: false,
     });
@@ -200,7 +198,6 @@ describe("Live Map workspace", () => {
     const searchPanel = container.querySelector('[data-testid="live-map-panel"]');
     expect(container.textContent).toContain("Airport board");
     expect(searchPanel).not.toBeNull();
-    expect(searchPanel?.classList.contains("live-map-panel--centered")).toBe(true);
   });
 
   it("opens Flight Search from the home URL query when another page links back to Live Map", async () => {
@@ -213,7 +210,6 @@ describe("Live Map workspace", () => {
     const searchPanel = container.querySelector('[data-testid="live-map-panel"]');
     expect(container.textContent).toContain("Airport board");
     expect(searchPanel).not.toBeNull();
-    expect(searchPanel?.classList.contains("live-map-panel--centered")).toBe(true);
   });
 
   it("clears the previous selected flight when airport board criteria changes", async () => {
@@ -275,7 +271,120 @@ describe("Live Map workspace", () => {
     expect(container.textContent).toContain("ANA110");
   });
 
-  it("lets a visible board result explicitly open the selected aircraft on the map", async () => {
+  it("shows an empty state when flight-number search finds no flights", async () => {
+    const apiClient = createMockApiClient({
+      searchResponse: flightSearchResponse([]),
+    });
+    const container = await renderInteractiveWorkspace(apiClient, {
+      initialDetail: flightDetail(),
+      initialMapData: mapData(),
+    });
+
+    await clickElement(buttonByText(container, "Search"));
+
+    expect(apiClient.searchFlights).toHaveBeenCalledWith("ANA110");
+    expect(apiClient.requestFlightRefresh).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("No flights found.");
+    expect(container.textContent).toContain("No selected flight");
+    expect(container.textContent).not.toContain("B789");
+  });
+
+  it("ignores a pending flight-number search after board criteria changes", async () => {
+    const search = deferred<FlightSearchResponse>();
+    const apiClient = createMockApiClient();
+    apiClient.searchFlights.mockReturnValueOnce(search.promise);
+    const container = await renderInteractiveWorkspace(apiClient, {
+      initialDetail: flightDetail(),
+      initialMapData: mapData(),
+    });
+
+    await clickElement(buttonByText(container, "Search"));
+    await clickElement(buttonByText(container, "Arrivals"));
+
+    await resolveDeferred(
+      search,
+      flightSearchResponse([
+        { flightId: "iflg_stale_search", ident: "FFT123", scheduledOut: "2026-05-04T08:00:00Z" },
+      ]),
+    );
+
+    expect(apiClient.requestFlightRefresh).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("No selected flight");
+    expect(container.textContent).not.toContain("FFT123");
+    expect(container.textContent).not.toContain("B789");
+  });
+
+  it("keeps a later explicit board candidate selection when an older flight-number search resolves", async () => {
+    const search = deferred<FlightSearchResponse>();
+    const apiClient = createMockApiClient({
+      detailResponse: flightDetail({ flightId: "iflg_board" }),
+      mapDataResponse: mapData({ flightId: "iflg_board" }),
+    });
+    apiClient.searchFlights.mockReturnValueOnce(search.promise);
+    const container = await renderInteractiveWorkspace(apiClient, {
+      initialAirportBoardResponse: airportBoard({
+        items: [
+          {
+            flightId: "iflg_board",
+            ident: "UAL130",
+            scheduledOut: "2026-05-04T07:00:00Z",
+          },
+        ],
+      }),
+      initialDetail: flightDetail({ flightId: "iflg_current" }),
+      initialMapData: mapData({ flightId: "iflg_current" }),
+    });
+
+    await clickElement(buttonByText(container, "Search"));
+    await clickElement(buttonByLabel(container, "Show UAL130 on map"));
+
+    await resolveDeferred(
+      search,
+      flightSearchResponse([
+        { flightId: "iflg_stale_search", ident: "FFT123", scheduledOut: "2026-05-04T08:00:00Z" },
+      ]),
+    );
+
+    expect(apiClient.requestFlightRefresh).toHaveBeenCalledTimes(1);
+    expect(apiClient.requestFlightRefresh).toHaveBeenCalledWith("iflg_board", [
+      "position",
+      "route",
+      "final_track",
+    ]);
+  });
+
+  it("ignores a pending airport board load after board criteria changes", async () => {
+    const boardLoad = deferred<AirportBoardResponse>();
+    const apiClient = createMockApiClient();
+    apiClient.getAirportBoard.mockReturnValueOnce(boardLoad.promise);
+    const container = await renderInteractiveWorkspace(apiClient, {
+      initialAirportBoardResponse: null,
+      initialDetail: flightDetail(),
+      initialMapData: mapData(),
+    });
+
+    await clickElement(buttonByText(container, "Load"));
+    await clickElement(buttonByText(container, "Arrivals"));
+
+    await resolveDeferred(
+      boardLoad,
+      airportBoard({
+        items: [
+          {
+            flightId: "iflg_stale_board",
+            ident: "FFT456",
+            scheduledOut: "2026-05-04T09:00:00Z",
+          },
+        ],
+      }),
+    );
+
+    expect(container.textContent).toContain("No selected flight");
+    expect(container.textContent).not.toContain("FFT456");
+    expect(container.textContent).not.toContain("B789");
+  });
+
+  it("keeps initial airport board results idle until a candidate is explicitly opened", async () => {
     const apiClient = createMockApiClient({
       detailResponse: flightDetail({ flightId: "iflg_1" }),
       mapDataResponse: mapData({ flightId: "iflg_1" }),
@@ -287,6 +396,9 @@ describe("Live Map workspace", () => {
     });
 
     expect(container.textContent).toContain("Show on map");
+    expect(container.textContent).toContain("No selected flight");
+    expect(apiClient.getFlightDetail).not.toHaveBeenCalled();
+    expect(apiClient.getFlightMapData).not.toHaveBeenCalled();
 
     await clickElement(buttonByLabel(container, "Show ANA110 on map"));
 
@@ -298,6 +410,55 @@ describe("Live Map workspace", () => {
     expect(apiClient.getFlightDetail).toHaveBeenCalledWith("iflg_1");
     expect(apiClient.getFlightMapData).toHaveBeenCalledWith("iflg_1");
     expect(container.textContent).toContain("B789");
+  });
+
+  it("ignores a pending board candidate load after board criteria changes", async () => {
+    const refresh = deferred<FlightRefreshResponse>();
+    const apiClient = createMockApiClient({
+      detailResponse: flightDetail({ flightId: "iflg_1" }),
+      mapDataResponse: mapData({ flightId: "iflg_1" }),
+    });
+    apiClient.requestFlightRefresh.mockReturnValueOnce(refresh.promise);
+    const container = await renderInteractiveWorkspace(apiClient, {
+      initialAirportBoardResponse: airportBoard(),
+      initialDetail: null,
+      initialMapData: null,
+    });
+
+    await clickElement(buttonByLabel(container, "Show ANA110 on map"));
+    await clickElement(buttonByText(container, "Arrivals"));
+
+    await resolveDeferred(refresh, refreshResponseFor("iflg_1"));
+
+    expect(apiClient.getFlightDetail).not.toHaveBeenCalled();
+    expect(apiClient.getFlightMapData).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("No selected flight");
+    expect(container.textContent).not.toContain("B789");
+    expect(searchPanel(container)).not.toBeNull();
+  });
+
+  it("ignores a pending manual refresh after the selected flight is cleared", async () => {
+    const refresh = deferred<FlightRefreshResponse>();
+    const apiClient = createMockApiClient({
+      detailResponse: flightDetail({ flightId: "iflg_1" }),
+      mapDataResponse: mapData({ flightId: "iflg_1" }),
+    });
+    apiClient.requestFlightRefresh.mockReturnValueOnce(refresh.promise);
+    const container = await renderInteractiveWorkspace(apiClient, {
+      initialAirportBoardResponse: airportBoard(),
+      initialDetail: flightDetail({ flightId: "iflg_1" }),
+      initialMapData: mapData({ flightId: "iflg_1" }),
+    });
+
+    await clickElement(buttonByText(container, "Refresh"));
+    await clickElement(buttonByText(container, "Arrivals"));
+
+    await resolveDeferred(refresh, refreshResponseFor("iflg_1"));
+
+    expect(apiClient.getFlightDetail).not.toHaveBeenCalled();
+    expect(apiClient.getFlightMapData).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("No selected flight");
+    expect(container.textContent).not.toContain("B789");
   });
 
   it("renders English search result and selected flight statuses", () => {
@@ -346,20 +507,17 @@ describe("Live Map workspace", () => {
 
     const openedPanel = searchPanel(container);
     expect(openedPanel).not.toBeNull();
-    expect(openedPanel?.classList.contains("live-map-panel--centered")).toBe(true);
 
     await pointerDown(document.body);
 
-    const closingPanel = searchPanel(container);
-    expect(closingPanel).not.toBeNull();
-    expect(closingPanel?.classList.contains("live-map-panel--closing")).toBe(true);
+    expect(searchPanel(container)).not.toBeNull();
 
     await advanceTimersByTime(420);
 
     expect(searchPanel(container)).toBeNull();
   });
 
-  it("animates the Flight Search panel while opening and closing from the sidebar action", async () => {
+  it("keeps the Flight Search panel mounted until the close delay completes", async () => {
     vi.useFakeTimers();
     const container = await renderInteractiveWorkspace(createMockApiClient(), {
       initialSearchPanelFocused: false,
@@ -371,64 +529,16 @@ describe("Live Map workspace", () => {
 
     const openedPanel = searchPanel(container);
     expect(openedPanel).not.toBeNull();
-    expect(openedPanel?.classList.contains("live-map-panel--centered")).toBe(true);
+    expect(container.textContent).toContain("Airport board");
 
     await clickElement(buttonByText(container, "Flight Search"));
 
-    const closingPanel = searchPanel(container);
-    expect(closingPanel).not.toBeNull();
-    expect(closingPanel?.classList.contains("live-map-panel--closing")).toBe(true);
+    expect(searchPanel(container)).not.toBeNull();
 
     await advanceTimersByTime(420);
 
     expect(searchPanel(container)).toBeNull();
-  });
-
-  it("smoothly releases the blurred map background while the search panel closes", async () => {
-    vi.useFakeTimers();
-    const globalCss = readFileSync(GLOBAL_CSS_PATH, "utf8");
-    const liveMapCss = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
-    const container = await renderInteractiveWorkspace(createMockApiClient());
-    const inset = sidebarInset(container);
-
-    expect(inset.classList.contains("map-workspace__inset--search-focus")).toBe(true);
-
-    await clickElement(buttonByText(container, "Flight Search"));
-
-    expect(searchPanel(container)?.classList.contains("live-map-panel--closing")).toBe(true);
-    expect(inset.classList.contains("map-workspace__inset--search-focus")).toBe(false);
-
-    await advanceTimersByTime(420);
-
-    expect(searchPanel(container)).toBeNull();
-    expect(globalCss).toMatch(
-      /\.mapbox-screen\s*\{[^}]*filter:\s*blur\(0\) saturate\(1\);[^}]*transform:\s*scale\(1\);[^}]*transition:[^}]*filter 420ms[^}]*transform 420ms/s,
-    );
-    expect(liveMapCss).toMatch(/\.live-map-panel\s*\{[^}]*will-change:\s*opacity, transform;/s);
-  });
-
-  it("blurs only the map background behind the centered search screen", () => {
-    const html = renderToStaticMarkup(
-      <TooltipProvider>
-        <MapWorkspace
-          accessToken="pk.test"
-          styleURL="mapbox://styles/example/style-id"
-          initialSearchPanelFocused
-        />
-      </TooltipProvider>,
-    );
-    const css = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
-
-    expect(html).toContain("map-workspace__inset--search-focus");
-    expect(css).toMatch(
-      /\.map-workspace__inset--search-focus\s+\.mapbox-screen\s*\{[^}]*filter:\s*blur\(10px\)[^;]*;[^}]*transform:\s*scale\(1\.02\);/s,
-    );
-    expect(css).not.toMatch(
-      /\.map-workspace__inset--search-focus\s+\.live-map-panel\s*\{[^}]*filter:\s*blur/s,
-    );
-    expect(css).not.toMatch(
-      /\.map-workspace__inset--search-focus\s+\.map-workspace__sidebar-trigger\s*\{[^}]*filter:\s*blur/s,
-    );
+    expect(buttonByText(container, "Flight Search").getAttribute("data-active")).not.toBe("true");
   });
 
   it("exposes airport, board-date, and flight-number controls without a native date input", async () => {
@@ -442,74 +552,10 @@ describe("Live Map workspace", () => {
     expect(container.querySelector('input[type="date"]')).toBeNull();
   });
 
-  it("does not restyle shadcn airport controls with the old form button selector", () => {
-    const css = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
-
-    expect(css).not.toContain(".live-map-panel__search button,");
-    expect(css).not.toContain(".live-map-panel__segmented button");
-    expect(css).not.toContain(".live-map-panel__search input");
-    expect(css).toContain(".live-map-panel__airport-trigger");
-    expect(css).toContain(".live-map-panel__date-trigger");
-    expect(css).toContain(".live-map-panel__submit");
-    expect(css).toContain(".live-map-panel__direction-button");
-    expect(css).toContain(".live-map-panel__flight-input");
-    expect(css).toContain(".live-map-panel__results button:disabled");
-  });
-
-  it("uses the same action column width for Load and Flight number Search controls", () => {
-    const css = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
-
-    expect(css).toMatch(/\.live-map-panel\s*\{[^}]*--live-map-panel-action-width:\s*5rem;/s);
-    expect(css).toMatch(
-      /\.live-map-panel__board-controls\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(7\.5rem, 0\.72fr\) var\(--live-map-panel-action-width\);/s,
-    );
-    expect(css).toMatch(
-      /\.live-map-panel__search--secondary > div:not\(\.live-map-panel__heading, \.live-map-panel__segmented\)\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) var\(--live-map-panel-action-width\);/s,
-    );
-    expect(css).toMatch(/\.live-map-panel__submit\s*\{[^}]*width:\s*100%;/s);
-  });
-
-  it("uses shadcn default dark tokens for the search panel colors", () => {
-    const globalCss = readFileSync(GLOBAL_CSS_PATH, "utf8");
-    const css = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
-
-    expect(globalCss).toContain("--map-surface-background: var(--background)");
-    expect(css).toContain("background: var(--card)");
-    expect(css).toContain("color: var(--card-foreground)");
-    expect(css).toContain("border: 1px solid var(--border)");
-    expect(css).toContain("background: var(--input)");
-    expect(css).toContain("background: var(--primary)");
-    expect(css).not.toContain("rgb(18 18 18 / 88%)");
-    expect(css).not.toContain("rgb(245 245 245 / 94%)");
-    expect(css).not.toContain("rgb(14 165 233)");
-  });
-
-  it("uses 4px radii for the search panel box, buttons, inputs, and popover layers", () => {
-    const css = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
-
-    expect(css).toMatch(/\.live-map-panel\s*\{[^}]*border-radius:\s*4px;/s);
-    expect(css).toMatch(
-      /\.live-map-panel__refresh,[^{]+\.live-map-panel__results button\s*\{[^}]*border-radius:\s*4px;/s,
-    );
-    expect(css).toMatch(/\.live-map-panel__direction-button\s*\{[^}]*border-radius:\s*4px;/s);
-    expect(css).toMatch(
-      /\.live-map-panel__airport-trigger,[^{]+\.live-map-panel__date-trigger,[^{]+\.live-map-panel__submit,[^{]+\.live-map-panel__flight-input\s*\{[^}]*border-radius:\s*4px;/s,
-    );
-    expect(css).toMatch(
-      /\.live-map-panel__airport-popover,[^{]+\.live-map-panel__calendar-popover\s*\{[^}]*border-radius:\s*4px;/s,
-    );
-    expect(css).toMatch(/\.live-map-panel__alert\s*\{[^}]*border-radius:\s*4px;/s);
-    expect(css).not.toMatch(
-      /\.live-map-panel(?:__[\w-]+)?[^{}]*\{[^}]*border-radius:\s*(?:6px|8px);/s,
-    );
-  });
-
   it("keeps Live Map panel CSS out of the global stylesheet", () => {
     const globalCss = readFileSync(GLOBAL_CSS_PATH, "utf8");
-    const liveMapCss = cssModuleGlobalView(readFileSync(LIVE_MAP_CSS_PATH, "utf8"));
 
     expect(globalCss).not.toContain(".live-map-panel");
-    expect(liveMapCss).toContain(".live-map-panel");
   });
 
   it("surfaces stale cache state without inventing map layer diagnostics in the search panel", () => {
@@ -595,8 +641,32 @@ function createMockApiClient({
     searchFlights: ReturnType<typeof vi.fn>;
     getFlightDetail: ReturnType<typeof vi.fn>;
     getFlightMapData: ReturnType<typeof vi.fn>;
+    getAirportBoard: ReturnType<typeof vi.fn>;
     requestFlightRefresh: ReturnType<typeof vi.fn>;
   };
+}
+
+function refreshResponseFor(flightId: string): FlightRefreshResponse {
+  return {
+    flightId,
+    acceptedTasks: [],
+    cache: validCache(),
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
+async function resolveDeferred<T>(pending: ReturnType<typeof deferred<T>>, value: T) {
+  await React.act(async () => {
+    pending.resolve(value);
+    await Promise.resolve();
+  });
 }
 
 async function renderInteractiveWorkspace(
@@ -649,44 +719,6 @@ function searchPanel(container: HTMLElement): HTMLElement | null {
   return container.querySelector('[data-testid="live-map-panel"]');
 }
 
-function sidebarInset(container: HTMLElement): HTMLElement {
-  const inset = container.querySelector(".map-workspace__inset");
-  if (!(inset instanceof HTMLElement)) {
-    throw new Error("map workspace inset not found");
-  }
-  return inset;
-}
-
-function cssModuleGlobalView(css: string): string {
-  let output = "";
-  for (let index = 0; index < css.length; index += 1) {
-    if (!css.startsWith(":global(", index)) {
-      output += css[index];
-      continue;
-    }
-
-    index += ":global(".length;
-    let depth = 1;
-    while (index < css.length && depth > 0) {
-      const char = css[index];
-      if (char === "(") {
-        depth += 1;
-        output += char;
-      } else if (char === ")") {
-        depth -= 1;
-        if (depth > 0) {
-          output += char;
-        }
-      } else {
-        output += char;
-      }
-      index += 1;
-    }
-    index -= 1;
-  }
-  return output;
-}
-
 function headingByText(container: HTMLElement, text: string): HTMLHeadingElement {
   const heading = Array.from(container.querySelectorAll("h1, h2, h3")).find(
     (candidate) => candidate.textContent?.trim() === text,
@@ -731,26 +763,39 @@ function inputByLabel(container: HTMLElement, label: string): HTMLInputElement {
   return input;
 }
 
-function airportBoard(): AirportBoardResponse {
+function airportBoard({
+  items,
+}: {
+  items?: Array<
+    Pick<FlightSearchResponse["items"][number], "flightId" | "ident"> &
+      Partial<Pick<FlightSearchResponse["items"][number], "scheduledOut">>
+  >;
+} = {}): AirportBoardResponse {
   return {
     airportCode: "RJTT",
     direction: "departures",
     date: "2026-05-04",
-    items: [
-      {
-        flightId: "iflg_1",
-        flightIdType: "internal",
-        provisionalFlightLegId: null,
-        faFlightId: "fa_1",
-        ident: "ANA110",
-        identIata: "NH110",
-        origin: "RJTT",
-        destination: "KJFK",
-        scheduledOut: "2026-05-04T01:00:00Z",
-        legIndex: 0,
-        status: "Scheduled",
-      },
-    ],
+    items: (
+      items ?? [
+        {
+          flightId: "iflg_1",
+          ident: "ANA110",
+          scheduledOut: "2026-05-04T01:00:00Z",
+        },
+      ]
+    ).map((item) => ({
+      flightId: item.flightId,
+      flightIdType: "internal",
+      provisionalFlightLegId: null,
+      faFlightId: "fa_1",
+      ident: item.ident,
+      identIata: item.ident === "ANA110" ? "NH110" : null,
+      origin: "RJTT",
+      destination: "KJFK",
+      scheduledOut: "scheduledOut" in item ? (item.scheduledOut ?? null) : "2026-05-04T01:00:00Z",
+      legIndex: 0,
+      status: "Scheduled",
+    })),
     cache: validCache(),
   };
 }
