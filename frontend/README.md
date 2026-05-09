@@ -130,7 +130,8 @@ search-panel styles live in
 `src/features/map-workspace/components/map-workspace.module.css`; and Usage
 layout styles live in `src/features/usage/components/usage-workspace.module.css`.
 `globals.css` must not contain `live-map-panel`, `usage-*`, or FullscreenMap
-presentation selectors.
+presentation selectors. Shared route loading styles stay in the App Router
+route group.
 
 The main sidebar navigation is grouped by backend-supported workflows:
 `Workspace` contains `Live Map`, `Flight Search`, and `Tracked Flights`; `Data`
@@ -271,11 +272,12 @@ surface has one consistent corner treatment. Manual refresh only requests
 hydration retry as `Show on map`, and is disabled while loading or when usage
 status reports fetching disabled, a budget stop, or an active rate limit.
 
-The App Router loading state uses `src/app/(app)/loading.tsx` with the
-documented shadcn Progress usage:
-`<Progress value={66} className="w-[60%]" />`. The loading surface uses the
-same map backing color as the main workspace, so route reloads and transitions
-show a compact progress bar without introducing a white flash.
+The App Router loading state uses `src/app/(app)/loading.tsx` and
+`src/app/(app)/loading.module.css` with the documented shadcn Progress usage.
+The loading surface is shared by every route in the `(app)` group and uses the
+root shadcn background token instead of map-only surface tokens, so route
+reloads and transitions show a compact progress bar without introducing a white
+flash.
 
 The frontend also includes shadcn `Card`, `Chart`, `Badge`, and `Alert`
 primitives for reusable surfaces, plus shadcn `Command`, `Popover`, and
