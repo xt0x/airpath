@@ -9,11 +9,11 @@ import styles from "@/features/usage/components/usage-workspace.module.css";
 
 export function UsageWorkspace() {
   return (
-    <SidebarProvider className={`usage-sidebar-layout ${styles.styleScope}`}>
+    <SidebarProvider className={`app-shell--fixed usage-sidebar-layout ${styles.styleScope}`}>
       <AppSidebar activePath="/usage" />
       <SidebarInset className="usage-workspace__inset">
-        <header className="map-workspace__toolbar usage-workspace__toolbar">
-          <SidebarTrigger className="map-workspace__sidebar-trigger usage-workspace__sidebar-trigger -ml-1" />
+        <header className="app-shell__toolbar usage-workspace__toolbar">
+          <SidebarTrigger className="app-shell__sidebar-trigger usage-workspace__sidebar-trigger -ml-1" />
         </header>
         <UsageLimitsScreen />
       </SidebarInset>

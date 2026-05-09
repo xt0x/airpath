@@ -2,6 +2,30 @@
   --fullscreen-map-style-scope: 1;
 }
 
+.styleScope:global(.mapbox-screen) {
+  pointer-events: auto;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--map-surface-background);
+}
+
+.styleScope :global(.mapbox-screen__canvas),
+.styleScope :global(.mapboxgl-map),
+.styleScope :global(.mapboxgl-canvas-container),
+.styleScope :global(.mapboxgl-canvas) {
+  position: absolute;
+  inset: 0;
+  background: var(--map-surface-background);
+}
+
+.styleScope :global(.mapboxgl-canvas) {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 :global(.mapbox-screen__notice) {
   position: absolute;
   z-index: 1;
