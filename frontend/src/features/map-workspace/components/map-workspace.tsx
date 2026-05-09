@@ -630,7 +630,7 @@ export function MapWorkspace({
   const sidebarActivePath = searchPanelVisible ? "flight-search" : activeSidebarAction;
 
   return (
-    <SidebarProvider className="map-sidebar-layout">
+    <SidebarProvider className="app-shell--fixed map-sidebar-layout">
       <AppSidebar
         activePath={sidebarActivePath}
         onFlightSearchSelect={toggleSearchPanel}
@@ -643,8 +643,8 @@ export function MapWorkspace({
           searchPanelFocused && "map-workspace__inset--search-focus",
         )}
       >
-        <header className="map-workspace__toolbar">
-          <SidebarTrigger className="map-workspace__sidebar-trigger -ml-1" />
+        <header className="app-shell__toolbar">
+          <SidebarTrigger className="app-shell__sidebar-trigger -ml-1" />
         </header>
         <FullscreenMap
           accessToken={accessToken}
