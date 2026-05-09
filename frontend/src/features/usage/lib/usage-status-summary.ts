@@ -76,6 +76,9 @@ function budgetPercent(cost: number, threshold: number): number {
 
 function stopReasons(status: UsageStatusResponse): string[] {
   const reasons: string[] = [];
+  if (!status.fetchingEnabled) {
+    reasons.push("Fetching paused");
+  }
   if (status.budget.stopped) {
     reasons.push("Budget stop");
   }

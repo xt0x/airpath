@@ -64,7 +64,7 @@ describe("UsageLimitsView", () => {
     );
 
     expect(html).toContain("Usage &amp; Limits");
-    expect(html).not.toContain("Fetching is paused");
+    expect(html).toContain("Fetching paused");
     expect(html).not.toContain("Available");
     expect(html).toContain("Budget stop");
     expect(html).toContain("Rate limit");
@@ -91,7 +91,27 @@ describe("UsageLimitsView", () => {
     expect(html).toContain("Rate limit");
   });
 
-  it("keeps loading and error states free of removed usage details", () => {
+  it("renders paused fetching as a stop reason without a budget or rate-limit stop", () => {
+    const html = renderToStaticMarkup(
+      <UsageLimitsView
+        state={{
+          kind: "ready",
+          status: usageStatus({
+            fetchingEnabled: false,
+            budget: { stopped: false },
+            rateLimit: { limited: false, resetAt: null },
+          }),
+        }}
+      />,
+    );
+
+    expect(html).not.toContain("Available");
+    expect(html).toContain("Fetching paused");
+    expect(html).not.toContain("Budget stop");
+    expect(html).not.toContain("Rate limit");
+  });
+
+  it("keeps loading empty and renders usage status errors without usage details", () => {
     const loading = renderToStaticMarkup(<UsageLimitsView state={{ kind: "loading" }} />);
     const error = renderToStaticMarkup(
       <UsageLimitsView state={{ kind: "error", message: "Request failed" }} />,
@@ -103,8 +123,8 @@ describe("UsageLimitsView", () => {
     expect(loading).not.toContain("Last checked");
 
     expect(error).toContain("Usage &amp; Limits");
-    expect(error).not.toContain("Request failed");
-    expect(error).not.toContain("Unavailable");
+    expect(error).toContain("Usage status unavailable");
+    expect(error).toContain("Request failed");
     expect(error).not.toContain("API cost");
     expect(error).not.toContain("Last checked");
   });

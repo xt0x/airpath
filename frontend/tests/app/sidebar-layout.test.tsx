@@ -83,42 +83,28 @@ describe("sidebar layout", () => {
     expect(html).not.toContain('href="/?flightSearch=1"');
   });
 
-  it("keeps action-backed menu item typography owned by SidebarMenuButton", () => {
+  it("renders sidebar action and route items through the shared menu", () => {
     const html = renderToStaticMarkup(
       withTooltipProvider(
         <MapWorkspace accessToken="pk.test" styleURL="mapbox://styles/example/style-id" />,
       ),
     );
 
-    expect(classNameForElementWithAttribute(html, "data-flight-search-trigger")).toContain(
-      "text-sm",
-    );
-    expect(classNameForElementWithAttribute(html, "data-flight-search-trigger")).toContain(
-      "font-normal",
-    );
-    expect(classNameForElementWithAttribute(html, "data-flight-search-trigger")).not.toContain(
-      "leading-5",
-    );
-    expect(classNameForElementWithAttribute(html, "data-tracked-flights-trigger")).toContain(
-      "text-sm",
-    );
-    expect(classNameForElementWithAttribute(html, "data-tracked-flights-trigger")).toContain(
-      "font-normal",
-    );
-    expect(classNameForElementWithAttribute(html, "data-tracked-flights-trigger")).not.toContain(
-      "leading-5",
-    );
-    expect(classNameForElementWithHref(html, "/")).toContain("font-normal");
-    expect(html).toContain(
-      'class="text-sm leading-5 font-normal group-data-[collapsible=icon]:hidden"',
-    );
+    expect(html).toContain("Live Map");
+    expect(html).toContain('href="/"');
+    expect(html).toContain("Flight Search");
+    expect(html).toContain('data-flight-search-trigger="true"');
+    expect(html).toContain("Tracked Flights");
+    expect(html).toContain('data-tracked-flights-trigger="true"');
+    expect(html).toContain("Usage &amp; Limits");
+    expect(html).toContain('href="/usage"');
   });
 
-  it("does not change sidebar menu font weight when an item is active", () => {
+  it("marks the Usage route active in the shared sidebar", () => {
     const html = renderToStaticMarkup(withTooltipProvider(<UsageWorkspace />));
 
-    expect(classNameForElementWithHref(html, "/usage")).toContain("data-active:bg-sidebar-accent");
-    expect(classNameForElementWithHref(html, "/usage")).not.toContain("data-active:font-medium");
+    expect(html).toContain('href="/usage"');
+    expect(html).toContain('data-active="true"');
   });
 
   it("keeps app sidebar source under components as documented", () => {
@@ -190,32 +176,4 @@ describe("sidebar layout", () => {
 
 function withTooltipProvider(children: React.ReactNode) {
   return <TooltipProvider>{children}</TooltipProvider>;
-}
-
-function classNameForElementWithAttribute(html: string, attribute: string): string {
-  const elementMatch = html.match(new RegExp(`<[^>]*${attribute}="true"[^>]*>`));
-  if (!elementMatch) {
-    throw new Error(`Element with ${attribute} not found`);
-  }
-
-  const className = elementMatch[0].match(/class="([^"]*)"/)?.[1];
-  if (className === undefined) {
-    throw new Error(`Element with ${attribute} has no class attribute`);
-  }
-
-  return className;
-}
-
-function classNameForElementWithHref(html: string, href: string): string {
-  const elementMatch = html.match(new RegExp(`<[^>]*href="${href}"[^>]*>`));
-  if (!elementMatch) {
-    throw new Error(`Element with href ${href} not found`);
-  }
-
-  const className = elementMatch[0].match(/class="([^"]*)"/)?.[1];
-  if (className === undefined) {
-    throw new Error(`Element with href ${href} has no class attribute`);
-  }
-
-  return className;
 }

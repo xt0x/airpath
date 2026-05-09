@@ -53,6 +53,7 @@ export function UsageLimitsView({ state }: { state: UsageLimitsViewState }) {
         <h1>Usage &amp; Limits</h1>
         {showAvailable ? <AvailableStatus /> : null}
       </div>
+      {state.kind === "error" ? <UsageStatusError message={state.message} /> : null}
       {state.kind === "ready" ? <UsageStatusOverview status={state.status} /> : null}
     </main>
   );
@@ -67,6 +68,16 @@ function AvailableStatus() {
       />
       Available
     </span>
+  );
+}
+
+function UsageStatusError({ message }: { message: string }) {
+  return (
+    <Alert variant="destructive" className="usage-limits__stop-alert">
+      <AlertTriangle aria-hidden="true" />
+      <AlertTitle>Usage status unavailable</AlertTitle>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
   );
 }
 

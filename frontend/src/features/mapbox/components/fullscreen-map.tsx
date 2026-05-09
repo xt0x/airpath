@@ -23,6 +23,8 @@ import {
 } from "@/features/mapbox/lib/map-route-layers";
 import { AIRPATH_MAP_THEME } from "@/features/mapbox/lib/map-theme";
 
+import styles from "@/features/mapbox/components/fullscreen-map.module.css";
+
 const DEFAULT_CENTER: [number, number] = [139.767, 35.681];
 const DEFAULT_ZOOM = 3.2;
 const AIRCRAFT_FOCUS_ZOOM = 7;
@@ -150,13 +152,13 @@ export function FullscreenMap({
       return;
     }
 
-    handledAircraftFocusRequestRef.current = aircraftFocusRequest;
     if (currentPosition !== null) {
       mapRef.current.flyTo({
         center: [currentPosition.longitude, currentPosition.latitude],
         essential: true,
         zoom: Math.max(mapRef.current.getZoom(), AIRCRAFT_FOCUS_ZOOM),
       });
+      handledAircraftFocusRequestRef.current = aircraftFocusRequest;
       return;
     }
 
@@ -169,6 +171,7 @@ export function FullscreenMap({
       maxZoom: AIRCRAFT_FOCUS_ZOOM,
       padding: ROUTE_FOCUS_PADDING,
     });
+    handledAircraftFocusRequestRef.current = aircraftFocusRequest;
   }, [aircraftFocusRequest, currentPosition, mapData, mapReady]);
 
   useEffect(() => {
@@ -247,7 +250,7 @@ export function FullscreenMap({
 
   return (
     <div
-      className="mapbox-screen"
+      className={`mapbox-screen ${styles.styleScope}`}
       data-map-provider="mapbox"
       data-route-line-color={AIRPATH_MAP_THEME.routeLine}
       data-map-style-url={styleURL}
