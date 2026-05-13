@@ -159,7 +159,7 @@
     ~ [data-slot="sidebar-inset"]
     .usage-workspace__sidebar-trigger
 ) {
-  --map-sidebar-trigger-x: 0rem !important;
+  --app-shell-sidebar-trigger-x: 0rem !important;
 }
 
 :global(

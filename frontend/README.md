@@ -71,12 +71,21 @@ The Live Map uses the same API base URL for
 `/v1/flights/{flightId}`, `/v1/flights/{flightId}/map-data`,
 `/v1/flights/{flightId}/positions`, and `/v1/flights/{flightId}/refresh`.
 Airport boards are the primary discovery path; flight-number search remains as a
-fallback. A flight-number search automatically selects its first result and
+fallback. Airport board results stay idle until the user presses `Show on map` on
+a candidate. A flight-number search automatically selects its first result and
 loads refresh/detail/map-data for that flight so the route can appear without a
-second click. Flight-number search results come from the API in `scheduledOut`
-ascending order. Position history is exposed in the client for future history
-toggles, but the default map renders only the selected flight's planned route,
-actual track, and current position.
+second click. When a flight-number search succeeds with no matches, the panel
+shows the result empty state and clears the selected-flight summary.
+Pending flight-number searches, airport board loads, selected-flight loads, and
+manual refreshes are ignored after the user changes board criteria, clears
+selection, starts another discovery request, explicitly opens a board candidate,
+or switches to Tracked Flights, so stale responses cannot restore cleared flight
+details, stale board candidates, or map focus later. Track hydration retries also
+stop once their selected-flight load or manual refresh has been invalidated.
+Flight-number search results come from the API in `scheduledOut` ascending order.
+Position history is exposed in the client for future history toggles, but the
+default map renders only the selected flight's planned route, actual track, and
+current position.
 
 `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is required for the browser map. Use a
 publishable Mapbox token only; do not put secret Mapbox tokens or backend
@@ -117,11 +126,12 @@ overrides. The generated Sidebar primitive stays in
 `src/components/ui/sidebar.tsx`, matching shadcn's direct `components/ui/<component>.tsx`
 layout. FullscreenMap marker, hover-card, and missing-token notice styles live
 in `src/features/mapbox/components/fullscreen-map.module.css`; Live Map
-search-panel styles live in
+search-panel and search-focus map transition styles live in
 `src/features/map-workspace/components/map-workspace.module.css`; and Usage
 layout styles live in `src/features/usage/components/usage-workspace.module.css`.
 `globals.css` must not contain `live-map-panel`, `usage-*`, or FullscreenMap
-presentation selectors.
+presentation selectors. Shared route loading styles stay in the App Router
+route group, while map blur/scale presentation stays feature-local.
 
 The main sidebar navigation is grouped by backend-supported workflows:
 `Workspace` contains `Live Map`, `Flight Search`, and `Tracked Flights`; `Data`
@@ -158,11 +168,10 @@ layout applies the `dark` class and sets shadcn's dark `--background`
 (`oklch(0.145 0 0)`) inline on `html` and `body`, so reloads do not show the
 browser's default white background while CSS is still loading.
 `--map-surface-background` resolves to `var(--background)`, and the html
-element, body, Tailwind base body rule, sidebar wrapper, map inset, Mapbox
-wrapper, Mapbox-generated map container, canvas container, and canvas all use
-that backing color. The base body rule does not reapply the generic white
-`bg-background`, so reloads do not briefly paint a white app background before
-Mapbox redraws. The Mapbox component still observes its container for real
+element, body, fixed route shell, map inset, Mapbox wrapper, Mapbox-generated
+map container, canvas container, and canvas all use that backing color. The base
+body rule only sets foreground color, so reloads do not briefly paint a white
+app background before Mapbox redraws. The Mapbox component still observes its container for real
 viewport changes, but sidebar open and close no longer change the map container
 width because the menu is overlaid on top of the map. The Mapbox component
 delegates native route source and layer orchestration to `map-route-layers.ts`,
@@ -206,8 +215,9 @@ actions, shadcn `Input` for the flight-number fallback, shadcn `Badge` for
 compact flight-data status labels, and shadcn `Spinner` for pending
 `Show on map` feedback. The normal Live Map state does not render the
 search panel. Pressing `Flight Search` in the sidebar switches the same
-workspace to the search state, marks that sidebar action active, and
-horizontally centers the search box within the visible map area. Its top edge
+workspace to the search state, marks that sidebar action active while the panel
+is visible, clears that active state after close, and horizontally centers the
+search box within the visible map area. Its top edge
 aligns with the Live Map menu hover row: `6.5rem` from the top when the sidebar
 is expanded and `4.5rem` when the sidebar is collapsed. The panel opens and
 closes with matching 420ms animations; closing keeps the panel mounted in a
@@ -261,11 +271,12 @@ surface has one consistent corner treatment. Manual refresh only requests
 hydration retry as `Show on map`, and is disabled while loading or when usage
 status reports fetching disabled, a budget stop, or an active rate limit.
 
-The App Router loading state uses `src/app/(app)/loading.tsx` with the
-documented shadcn Progress usage:
-`<Progress value={66} className="w-[60%]" />`. The loading surface uses the
-same map backing color as the main workspace, so route reloads and transitions
-show a compact progress bar without introducing a white flash.
+The App Router loading state uses `src/app/(app)/loading.tsx` and
+`src/app/(app)/loading.module.css` with the documented shadcn Progress usage.
+The loading surface is shared by every route in the `(app)` group and uses the
+root shadcn background token instead of map-only surface tokens, so route
+reloads and transitions show a compact progress bar without introducing a white
+flash.
 
 The frontend also includes shadcn `Card`, `Chart`, `Badge`, and `Alert`
 primitives for reusable surfaces, plus shadcn `Command`, `Popover`, and
@@ -290,28 +301,30 @@ progress indicator.
 Backend secrets, API keys, queue payloads, projections, cache source, and
 operational stop/resume controls stay out of the frontend. The page content
 starts below the fixed sidebar trigger toolbar with deliberate top spacing, and
-the Usage inset remains the scroll container because the app body is fixed for
-the fullscreen map shell. The Usage sidebar shell keeps the provider as the flex
-layout wrapper, allowing the reserved sidebar gap to keep the heading and cards
-outside the opening desktop menu. Usage spacing, toolbar positioning, scroll
-behavior, and sidebar-state overrides belong to `usage-workspace.module.css`.
+the Usage inset remains the scroll container because the fixed route shell, not
+the document body, owns fullscreen overflow. The Usage sidebar shell keeps the
+provider as the flex layout wrapper, allowing the reserved sidebar gap to keep
+the heading and cards outside the opening desktop menu. Usage spacing, toolbar
+positioning, scroll behavior, and sidebar-state overrides belong to
+`usage-workspace.module.css`.
 
 The sidebar menu background is centralized as
 `--sidebar-menu-background: var(--background)`, matching shadcn's default dark
 background token. `--sidebar` references that token, while `--sidebar-border`
 references `var(--border)` so the menu panel and its vertical border line follow
 the default shadcn dark palette. The menu background token is exposed to Tailwind
-as `--color-sidebar-menu-background`. The map-side sidebar trigger uses
+as `--color-sidebar-menu-background`. The shared app shell sidebar trigger uses
 `var(--foreground)` for the icon and `var(--accent)` for hover, and does not keep
 a separate collapsed-state or focus background. The trigger button radius is
 forced to 4px, so its hover background box matches the Mapbox control corner
 radius instead of shadcn's default icon-button radius. When the sidebar is
 collapsed, the trigger uses `--sidebar-width-icon` for its x offset and
-`--map-sidebar-collapsed-trigger-y`, derived from the collapsed identity icon
-center and the toolbar center, for its y offset. This keeps all sidebar shells
-vertically aligned without covering the identity icon. The trigger transform is
-composed from `--map-sidebar-trigger-x` and `--map-sidebar-trigger-y`, which
-prevents open/close animation from temporarily dropping the x or y offset.
+`--app-shell-sidebar-collapsed-trigger-y`, derived from the collapsed identity
+icon center and the toolbar center, for its y offset. This keeps all sidebar
+shells vertically aligned without covering the identity icon. The trigger
+transform is composed from `--app-shell-sidebar-trigger-x` and
+`--app-shell-sidebar-trigger-y`, which prevents open/close animation from
+temporarily dropping the x or y offset.
 Desktop sidebar side borders also use `border-sidebar-border` so menu open/close
 does not reveal a mismatched vertical border. Global CSS must not set generated
 sidebar gap or icon-menu dimensions through broad `data-slot` selectors; those

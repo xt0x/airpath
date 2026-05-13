@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="ja"
+      lang="en"
       className={cn("dark font-sans", geist.variable)}
       style={{ backgroundColor: SHADCN_DARK_BACKGROUND }}
     >
