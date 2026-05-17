@@ -4,7 +4,7 @@ AWS resources are managed with Terraform. Lambda and Next.js build artifacts are
 
 ## Layout
 
-- `bootstrap`: Initial state bucket, KMS, OIDC, and Terraform execution role setup
+- `bootstrap`: Initial state bucket, KMS, OIDC, and Terraform execution role setup with native `terraform test` coverage
 - `envs/dev`: implemented personal demo environment
 - `envs/stg`: staging root with backend, provider, variable, and output configuration only
 - `envs/prod`: production root with backend, provider, variable, and output configuration only
@@ -12,11 +12,13 @@ AWS resources are managed with Terraform. Lambda and Next.js build artifacts are
 
 Only the dev environment currently declares resources. The stg and prod roots keep only the files required to validate environment naming, partial S3 backend wiring, variables, and CI paths without implying deployable staging or production infrastructure.
 
+The bootstrap root carries native `terraform test` coverage for state bucket hardening, KMS-backed encryption defaults, GitHub OIDC role naming, environment-scoped state and lockfile keys, and backend configuration output.
+
 Reusable modules declare their own Terraform and AWS provider requirements so they can be initialized and tested directly. Module-level tests use Terraform's mock provider to inspect interpreted plan/apply values without requiring AWS credentials or creating AWS resources.
 
-The stg and prod roots also carry native `terraform test` coverage under `tests/` to prove their default environment output and reject cross-environment variable values. Vitest HCL contract tests keep their placeholder shape explicit: provider, partial S3 backend, variables, and outputs only, with no resources, data sources, or modules until deployable staging or production infrastructure is intentionally introduced.
+The stg and prod roots also carry native `terraform test` coverage under `tests/` to prove their default environment output and reject cross-environment variable values.
 
-The dev root carries native plan-based tests in addition to Vitest HCL contract tests. IAM policy semantic tests decode Terraform-rendered policy JSON to guard service boundaries without changing the services contract: API must not read secret values, only the fetcher can read the FlightAware secret value, dispatcher has no S3 or Secrets Manager permissions, and SQS/DynamoDB permissions remain scoped to module outputs. Dev plan-value tests also assert the default and opt-in FlightAware runtime flags, secret-reference-only outputs, and the `airpath-dev-*` naming policy for planned Lambda, data, storage, and eventing outputs.
+The dev root carries native plan-based tests. IAM policy semantic tests decode Terraform-rendered policy JSON to guard service boundaries without changing the services contract: API must not read secret values, only the fetcher can read the FlightAware secret value, dispatcher has no S3 or Secrets Manager permissions, and SQS/DynamoDB permissions remain scoped to module outputs. Dev plan-value tests also assert the default and opt-in FlightAware runtime flags, secret-reference-only outputs, and the `airpath-dev-*` naming policy for planned Lambda, data, storage, and eventing outputs.
 
 ## Naming And Secrets
 
@@ -54,22 +56,9 @@ make terraform-test
 make terraform-check
 ```
 
-`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting across bootstrap, environment roots, and reusable modules. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. Checkov is used for selected security policy checks through `make terraform-policy`; the script uses `checkov` from `PATH` or the pinned `.checkov-version` through `uvx`. Repository-specific security policy tests live under `infra/terraform/security-policy/`. `make terraform-test` delegates to `scripts/ci/terraform-test.sh`, which initializes the dev root, the stg/prod placeholder roots, and each reusable module with `-backend=false`, then runs their native `.tftest.hcl` files. CI runs `make terraform-check`, so the same fmt, validate, native Terraform tests, lint, and policy checks are enforced for pull requests. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
+`terraform fmt` is the canonical Terraform formatter. TFLint is used for Terraform linting across bootstrap, environment roots, and reusable modules. Local runs use `tflint` from `PATH` or download the pinned version into `.cache/tflint`. Checkov is used for selected security policy checks through `make terraform-policy`; the script uses `checkov` from `PATH` or the pinned `.checkov-version` through `uvx`. `make terraform-test` delegates to `scripts/ci/terraform-test.sh`, which automatically discovers Terraform directories that contain `tests/*.tftest.hcl`, initializes each with `-backend=false`, then runs its native tests. CI runs `make terraform-check`, so the same fmt, validate, native Terraform tests, lint, and policy checks are enforced for pull requests. Generated module-level `.terraform.lock.hcl` files are ignored; environment and bootstrap lock files remain committed.
 
-The Checkov baseline is intentionally narrow and enforced by `.checkov.yml`: S3 public access controls, S3 encryption, SQS encryption, and S3 public access block attachment. Repository-specific Vitest policy tests cover the Airpath-specific pieces that generic scanners cannot model cleanly: no Terraform-managed Secrets Manager secret values and no wildcard IAM resource policies outside the explicit bootstrap exceptions.
-
-### Sandbox Apply/Destroy Integration Test
-
-The dev root also has an opt-in sandbox AWS apply/destroy integration test:
-
-```sh
-make lambda-artifacts
-AIRPATH_TERRAFORM_SANDBOX_APPLY_DESTROY=1 pnpm exec vitest run infra/terraform/envs/dev/sandbox-apply-destroy.test.ts
-```
-
-This test is skipped by default and is intended for manual, nightly, or release-before-deploy validation in a disposable sandbox AWS account. It runs `terraform apply`, checks safe Terraform outputs for Lambda, HTTP API, SQS, DynamoDB, S3, CloudWatch, and Secrets Manager references, checks `terraform state list` for the expected live resource types, then runs `terraform destroy` against the same temporary local state path.
-
-Use `AIRPATH_TERRAFORM_SANDBOX_TFVARS=/absolute/path/to/terraform.tfvars` when the sandbox run needs non-default dev inputs. Do not provide raw API keys through Terraform variables, tfvars files, outputs, or state. The FlightAware API key value must remain managed outside Terraform; Terraform receives only the Secrets Manager secret name and emits only the secret ARN reference.
+The Checkov baseline is intentionally narrow and enforced by `.checkov.yml`: S3 public access controls, S3 encryption, SQS encryption, and S3 public access block attachment.
 
 ## Dev Personal Demo
 

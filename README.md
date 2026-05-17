@@ -15,7 +15,7 @@ The repository includes:
 - Shared TypeScript API schemas, route builders, fixtures, and validation
 - DynamoDB, S3, SQS, Secrets Manager, Lambda, and HTTP API adapters
 - Terraform environments and CI policy checks
-- Unit, contract, architecture, Terraform, and opt-in integration tests
+- Unit, contract, architecture, and Terraform tests
 
 ## Quick Start
 
@@ -41,6 +41,8 @@ Start the frontend:
 ```bash
 pnpm dev
 ```
+
+Do not run `npx next dev` from the repository root; use the root `pnpm dev` script so the frontend workspace receives the right package context.
 
 For local browser testing against the Go API, start the API server in a second terminal:
 
@@ -82,7 +84,7 @@ make gitleaks
 ├─ services/        # Go application, domain, adapter, and Lambda/local entrypoints
 ├─ infra/
 │  ├─ ci/           # CI helper tests
-│  └─ terraform/    # AWS bootstrap, environments, modules, and policy tests
+│  └─ terraform/    # AWS bootstrap, environments, modules, and policy checks
 ├─ scripts/         # Build and CI support scripts
 └─ Makefile         # Local development and CI command entrypoint
 ```
